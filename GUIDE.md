@@ -194,6 +194,100 @@ By the end of Day 1, the project should have:
 - the first basic custom backend endpoint
 - a clear package structure for the rest of the assignment
 
+
+
+### Day 2 tasks
+
+1. Review the Day 1 endpoints and clean up what is only temporary.
+    - Keep the local users endpoints.
+    - Keep the public ReqRes fetch endpoint because it is still useful.
+    - Keep the import endpoint only if it helps with testing/demo.
+
+2. Complete local REST CRUD for users.
+    - `GET /api/users`
+    - `GET /api/users/{id}`
+    - `POST /api/users`
+    - `PUT /api/users/{id}`
+    - `DELETE /api/users/{id}`
+
+3. Add simple update logic in the service layer.
+    - Find user by id.
+    - If user exists, update fields.
+    - If user does not exist, return a simple not found error.
+
+4. Add simple delete logic in the service layer.
+    - Find by id before deleting.
+    - Return a clear response if the user does not exist.
+
+5. Add a basic DTO decision if needed.
+    - If possible, stay simple and use the entity directly for Day 2.
+    - Only introduce request/response DTOs if the controller becomes messy.
+
+6. Add minimal error handling.
+    - handle user not found
+    - return HTTP status codes clearly
+    - keep messages simple and readable
+
+7. Test all CRUD operations manually.
+    - create user
+    - read all users
+    - read one user by id
+    - update user
+    - delete user
+    - verify results in H2 console
+
+### End of Day 2 target
+
+By the end of Day 2, the project should have:
+
+- a complete local Users CRUD REST API
+- all four required HTTP methods working
+- data saved in H2
+- simple not found handling
+- endpoints that are easy to test and easy to demo
+
+### Day 2 manual test commands
+
+Get all users:
+
+```bash
+curl -s http://localhost:8080/api/users
+```
+
+Get one user by id:
+
+```bash
+curl -s http://localhost:8080/api/users/1
+```
+
+Create a new user:
+
+```bash
+curl -s -X POST http://localhost:8080/api/users \
+  -H "Content-Type: application/json" \
+  -d '{"email":"new.user@example.com","firstName":"New","lastName":"User","avatar":"https://example.com/avatar.jpg"}'
+```
+
+Update a user:
+
+```bash
+curl -s -X PUT http://localhost:8080/api/users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"email":"updated.user@example.com","firstName":"Updated","lastName":"User","avatar":"https://example.com/updated-avatar.jpg"}'
+```
+
+Delete a user:
+
+```bash
+curl -s -X DELETE http://localhost:8080/api/users/1
+```
+
+Check not found:
+
+```bash
+curl -s http://localhost:8080/api/users/999
+```
+
 ## Suggested day-by-day direction from the updated plan
 
 ### Day 1
@@ -207,11 +301,14 @@ By the end of Day 1, the project should have:
 
 ### Day 2
 
-- build custom `GET /users`
-- build custom `POST /users`
-- build custom `PUT /users/{id}`
-- build custom `DELETE /users/{id}`
-- save everything in H2
+Goal: finish the basic custom Users REST API on top of the Day 1 H2 setup.
+
+Planned approach:
+
+- keep the same simple package structure from Day 1
+- do not add unnecessary layers or complex patterns
+- continue using the same local `User` entity
+- make the API easy to test with browser, Postman, and later the frontend
 
 ### Day 3
 
