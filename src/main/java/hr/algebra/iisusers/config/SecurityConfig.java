@@ -37,11 +37,13 @@ public class SecurityConfig {
                 // Stateless — JWT, no server session
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Public: login, refresh, H2 console, WSDL, XML/JSON validation
+                        // Public: login, refresh, H2 console, WSDL, XML/JSON validation, GUI
                         .requestMatchers("/auth/**", "/h2-console/**", "/ws/**",
-                                "/api/xml/**", "/api/json/**").permitAll()
+                                "/api/xml/**", "/api/json/**", "/graphiql/**", "/", "/index.html").permitAll()
                         // GET endpoints: both roles can read
                         .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("READ_ONLY", "FULL_ACCESS")
+                        // GraphQL (always POST): both roles can query/mutate
+                        .requestMatchers(HttpMethod.POST, "/graphql").hasAnyRole("READ_ONLY", "FULL_ACCESS")
                         // Write endpoints: only FULL_ACCESS
                         .requestMatchers(HttpMethod.POST, "/api/**").hasRole("FULL_ACCESS")
                         .requestMatchers(HttpMethod.PUT, "/api/**").hasRole("FULL_ACCESS")

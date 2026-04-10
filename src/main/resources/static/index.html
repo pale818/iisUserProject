@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IIS Users</title>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+    h2 { border-bottom: 1px solid #ccc; padding-bottom: 6px; }
+    input, select, button { padding: 6px 10px; margin: 4px 2px; font-size: 14px; }
+    button { cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+    th { background: #f0f0f0; }
+    .hidden { display: none; }
+    #status { color: green; margin: 6px 0; }
+    #error  { color: red;   margin: 6px 0; }
+    #weather-result { margin-top: 10px; background: #f9f9f9; padding: 10px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-section">
+  <h2>Login</h2>
+  <input id="username" placeholder="Username" value="admin">
+  <input id="password" type="password" placeholder="Password" value="admin123">
+  <button onclick="login()">Login</button>
+  <div id="error"></div>
+</div>
+
+<!-- MAIN APP (shown after login) -->
+<div id="app-section" class="hidden">
+  <div id="status"></div>
+
+  <!-- USERS -->
+  <h2>Users</h2>
+  <label>
+    <input type="radio" name="api" value="local" checked onchange="loadUsers()"> Local API (H2)
+  </label>
+  &nbsp;
+  <label>
+    <input type="radio" name="api" value="public" onchange="loadUsers()"> Public API (ReqRes)
+  </label>
+  <button onclick="loadUsers()" style="margin-left:10px">Refresh</button>
+
+  <table id="users-table">
+    <thead><tr><th>ID</th><th>Email</th><th>First Name</th><th>Last Name</th><th>Avatar</th><th></th></tr></thead>
+    <tbody id="users-body"></tbody>
+  </table>
+
+  <!-- CREATE USER (local only) -->
+  <h2>Create User (local)</h2>
+  <input id="new-email"     placeholder="Email">
+  <input id="new-firstname" placeholder="First Name">
+  <input id="new-lastname"  placeholder="Last Name">
+  <input id="new-avatar"    placeholder="Avatar URL">
+  <button onclick="createUser()">Create</button>
+
+  <!-- GRAPHQL -->
+  <h2>GraphQL — User Query</h2>
+  <button onclick="gqlQueryUsers()">Query all users via GraphQL</button>
+  <pre id="gql-result" style="background:#f4f4f4;padding:10px;border:1px solid #ccc;margin-top:8px"></pre>
+
+  <!-- WEATHER -->
+  <h2>Weather (gRPC via REST)</h2>
+  <input id="station" placeholder="Station (e.g. Zagreb)" value="Zagreb">
+  <button onclick="getWeather()">Get Weather</button>
+  <div id="weather-result" class="hidden"></div>
+
+  <br><br>
+  <button onclick="logout()">Logout</button>
+</div>
+
+<script>
+  let accessToken = null;
+
+  function setStatus(msg) { document.getElementById('status').textContent = msg; }
+  function setError(msg)  { document.getElementById('error').textContent  = msg; }
+
+  async function login() {
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    setError('');
+    try {
+      const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (!res.ok) { setError('Login failed: invalid credentials'); return; }
+      const data = await res.json();
+      accessToken = data.accessToken;
+      document.getElementById('login-section').classList.add('hidden');
+      document.getElementById('app-section').classList.remove('hidden');
+      setStatus('Logged in as ' + username);
+      loadUsers();
+    } catch (e) { setError('Login error: ' + e.message); }
+  }
+
+  function logout() {
+    accessToken = null;
+    document.getElementById('app-section').classList.add('hidden');
+    document.getElementById('login-section').classList.remove('hidden');
+    document.getElementById('users-body').innerHTML = '';
+  }
+
+  function selectedApi() {
+    return document.querySelector('input[name="api"]:checked').value;
+  }
+
+  async function loadUsers() {
+    const api = selectedApi();
+    const url = api === 'local' ? '/api/users' : '/api/users/public';
+    try {
+      const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + accessToken } });
+      if (!res.ok) { setStatus('Failed to load users: ' + res.status); return; }
+      const data = await res.json();
+      const users = api === 'local' ? data : (data.data || []);
+      renderUsers(users, api === 'local');
+    } catch (e) { setStatus('Error loading users: ' + e.message); }
+  }
+
+  function renderUsers(users, showDelete) {
+    const tbody = document.getElementById('users-body');
+    tbody.innerHTML = '';
+    users.forEach(u => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + (u.id || '') + '</td>' +
+        '<td>' + (u.email || '') + '</td>' +
+        '<td>' + (u.firstName || u.first_name || '') + '</td>' +
+        '<td>' + (u.lastName  || u.last_name  || '') + '</td>' +
+        '<td>' + (u.avatar ? '<img src="' + u.avatar + '" height="30">' : '') + '</td>' +
+        '<td>' + (showDelete ? '<button onclick="deleteUser(' + u.id + ')">Delete</button>' : '') + '</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function createUser() {
+    const user = {
+      email:     document.getElementById('new-email').value,
+      firstName: document.getElementById('new-firstname').value,
+      lastName:  document.getElementById('new-lastname').value,
+      avatar:    document.getElementById('new-avatar').value
+    };
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+        body: JSON.stringify(user)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setStatus('Create failed: ' + (err.error || res.status)); return;
+      }
+      setStatus('User created.');
+      loadUsers();
+    } catch (e) { setStatus('Error: ' + e.message); }
+  }
+
+  async function deleteUser(id) {
+    if (!confirm('Delete user ' + id + '?')) return;
+    try {
+      const res = await fetch('/api/users/' + id, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + accessToken }
+      });
+      if (!res.ok) { setStatus('Delete failed: ' + res.status); return; }
+      setStatus('User ' + id + ' deleted.');
+      loadUsers();
+    } catch (e) { setStatus('Error: ' + e.message); }
+  }
+
+  async function gqlQueryUsers() {
+    try {
+      const res = await fetch('/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+        body: JSON.stringify({ query: '{ users { id email firstName lastName } }' })
+      });
+      const data = await res.json();
+      document.getElementById('gql-result').textContent = JSON.stringify(data, null, 2);
+    } catch (e) { document.getElementById('gql-result').textContent = 'Error: ' + e.message; }
+  }
+
+  async function getWeather() {
+    const station = document.getElementById('station').value || 'Zagreb';
+    const el = document.getElementById('weather-result');
+    try {
+      const res = await fetch('/api/weather?station=' + encodeURIComponent(station), {
+        headers: { 'Authorization': 'Bearer ' + accessToken }
+      });
+      if (!res.ok) { el.textContent = 'Failed: ' + res.status; el.classList.remove('hidden'); return; }
+      const data = await res.json();
+      el.innerHTML =
+        '<strong>' + data.station + '</strong><br>' +
+        'Temperature: ' + data.temperature + '<br>' +
+        'Description: ' + data.description + '<br>' +
+        'Time: ' + data.timestamp;
+      el.classList.remove('hidden');
+    } catch (e) { el.textContent = 'Error: ' + e.message; el.classList.remove('hidden'); }
+  }
+</script>
+</body>
+</html>
