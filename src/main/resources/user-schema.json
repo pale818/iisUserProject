@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["email", "firstName", "lastName", "avatar"],
+  "properties": {
+    "id":        { "type": "integer" },
+    "email":     { "type": "string" },
+    "firstName": { "type": "string" },
+    "lastName":  { "type": "string" },
+    "avatar":    { "type": "string" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://algebra.hr/soap/users"
+           xmlns:tns="http://algebra.hr/soap/users"
+           elementFormDefault="qualified">
+
+    <!-- Input: search term sent by the SOAP client -->
+    <xs:element name="searchUsersRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="searchTerm" type="xs:string"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Output: XML string containing the matching users -->
+    <xs:element name="searchUsersResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="result" type="xs:string"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+</xs:schema>

@@ -60,7 +60,7 @@ public class UserController {
         return Map.of("message", "User deleted successfully.");
     }
 
-    // This temporary helper imports public ReqRes users into the local H2 database.
+    // This temporary helper imports public ReqRes users into the local H2 database
     @PostMapping("/import-public")
     public List<User> importPublicUsers(@RequestParam(defaultValue = "1") int page) {
         return userService.importPublicUsers(page);
