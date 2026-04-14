@@ -14,7 +14,8 @@
     .hidden { display: none; }
     #status { color: green; margin: 6px 0; }
     #error  { color: red;   margin: 6px 0; }
-    #weather-result { margin-top: 10px; background: #f9f9f9; padding: 10px; border: 1px solid #ccc; }
+    textarea { width: 100%; font-family: monospace; font-size: 13px; margin-top: 6px; }
+    .result-box { background:#f4f4f4; padding:10px; border:1px solid #ccc; margin-top:8px; white-space:pre-wrap; font-family:monospace; font-size:13px; }
   </style>
 </head>
 <body>
@@ -48,24 +49,56 @@
     <tbody id="users-body"></tbody>
   </table>
 
-  <!-- CREATE USER (local only) -->
-  <h2>Create User (local)</h2>
-  <input id="new-email"     placeholder="Email">
-  <input id="new-firstname" placeholder="First Name">
-  <input id="new-lastname"  placeholder="Last Name">
-  <input id="new-avatar"    placeholder="Avatar URL">
-  <button onclick="createUser()">Create</button>
+  <!-- CREATE USER (local only, FULL_ACCESS only) -->
+  <div id="create-section" class="hidden">
+    <h2>Create User (local)</h2>
+    <input id="new-email"     placeholder="Email">
+    <input id="new-firstname" placeholder="First Name">
+    <input id="new-lastname"  placeholder="Last Name">
+    <input id="new-avatar"    placeholder="Avatar URL">
+    <button onclick="createUser()">Create</button>
+  </div>
+
+  <!-- XML VALIDATION -->
+  <h2>XML Validation + Save</h2>
+  <p style="margin:4px 0;font-size:13px;color:#555">Edit the XML below then submit. Valid data will be saved to the database.</p>
+  <textarea id="xml-input" rows="8"></textarea><br>
+  <button onclick="submitXml()">Validate &amp; Save</button>
+  <div id="xml-result" class="result-box hidden"></div>
+
+  <!-- JSON VALIDATION -->
+  <h2>JSON Validation + Save</h2>
+  <p style="margin:4px 0;font-size:13px;color:#555">Edit the JSON below then submit. Valid data will be saved to the database.</p>
+  <textarea id="json-input" rows="8"></textarea><br>
+  <button onclick="submitJson()">Validate &amp; Save</button>
+  <div id="json-result" class="result-box hidden"></div>
+
+  <!-- JAKARTA XML VALIDATION -->
+  <h2>Jakarta XML Validation</h2>
+  <p style="margin:4px 0;font-size:13px;color:#555">Validates the last generated ReqRes XML against the XSD schema using Jakarta XML Bind.</p>
+  <button onclick="generateXmlForValidation()">1. Generate XML from ReqRes</button>
+  <span id="jakarta-gen-status" style="margin-left:8px;color:green"></span><br><br>
+  <button onclick="jakartaValidate()">2. Validate with Jakarta XML</button>
+  <div id="jakarta-result" class="result-box hidden"></div>
+
+  <!-- SOAP SEARCH -->
+  <h2>SOAP — Search Users by Name</h2>
+  <button onclick="generateXml()">1. Generate XML from ReqRes</button>
+  <span id="xml-gen-status" style="margin-left:8px;color:green"></span><br><br>
+  <input id="soap-term" placeholder="2. Search term (e.g. george)">
+  <button onclick="soapSearch()">Search via SOAP</button>
+  <div id="soap-result" class="result-box hidden"></div>
 
   <!-- GRAPHQL -->
   <h2>GraphQL — User Query</h2>
   <button onclick="gqlQueryUsers()">Query all users via GraphQL</button>
-  <pre id="gql-result" style="background:#f4f4f4;padding:10px;border:1px solid #ccc;margin-top:8px"></pre>
+  <div id="gql-result" class="result-box hidden"></div>
 
   <!-- WEATHER -->
   <h2>Weather (gRPC via REST)</h2>
-  <input id="station" placeholder="Station (e.g. Zagreb)" value="Zagreb">
+  <input id="station" placeholder="Station name (e.g. Zagreb)" value="Zagreb">
   <button onclick="getWeather()">Get Weather</button>
-  <div id="weather-result" class="hidden"></div>
+  <div id="weather-result" class="hidden" style="margin-top:10px"></div>
 
   <br><br>
   <button onclick="logout()">Logout</button>
@@ -73,6 +106,24 @@
 
 <script>
   let accessToken = null;
+  let userRole = null;
+
+  const XML_TEMPLATE =
+`<user>
+  <id>1</id>
+  <email>test@example.com</email>
+  <firstName>Test</firstName>
+  <lastName>User</lastName>
+  <avatar>https://example.com/avatar.jpg</avatar>
+</user>`;
+
+  const JSON_TEMPLATE = JSON.stringify({
+    id: 1,
+    email: "test@example.com",
+    firstName: "Test",
+    lastName: "User",
+    avatar: "https://example.com/avatar.jpg"
+  }, null, 2);
 
   function setStatus(msg) { document.getElementById('status').textContent = msg; }
   function setError(msg)  { document.getElementById('error').textContent  = msg; }
@@ -90,15 +141,20 @@
       if (!res.ok) { setError('Login failed: invalid credentials'); return; }
       const data = await res.json();
       accessToken = data.accessToken;
+      userRole = data.role;
       document.getElementById('login-section').classList.add('hidden');
       document.getElementById('app-section').classList.remove('hidden');
-      setStatus('Logged in as ' + username);
+      setStatus('Logged in as ' + username + ' (' + userRole + ')');
+      document.getElementById('create-section').classList.toggle('hidden', userRole !== 'FULL_ACCESS');
+      document.getElementById('xml-input').value = XML_TEMPLATE;
+      document.getElementById('json-input').value = JSON_TEMPLATE;
       loadUsers();
     } catch (e) { setError('Login error: ' + e.message); }
   }
 
   function logout() {
     accessToken = null;
+    userRole = null;
     document.getElementById('app-section').classList.add('hidden');
     document.getElementById('login-section').classList.remove('hidden');
     document.getElementById('users-body').innerHTML = '';
@@ -120,9 +176,10 @@
     } catch (e) { setStatus('Error loading users: ' + e.message); }
   }
 
-  function renderUsers(users, showDelete) {
+  function renderUsers(users, isLocal) {
     const tbody = document.getElementById('users-body');
     tbody.innerHTML = '';
+    const canDelete = isLocal && userRole === 'FULL_ACCESS';
     users.forEach(u => {
       const tr = document.createElement('tr');
       tr.innerHTML =
@@ -130,8 +187,8 @@
         '<td>' + (u.email || '') + '</td>' +
         '<td>' + (u.firstName || u.first_name || '') + '</td>' +
         '<td>' + (u.lastName  || u.last_name  || '') + '</td>' +
-        '<td>' + (u.avatar ? '<img src="' + u.avatar + '" height="30">' : '') + '</td>' +
-        '<td>' + (showDelete ? '<button onclick="deleteUser(' + u.id + ')">Delete</button>' : '') + '</td>';
+        '<td>' + (u.avatar ? '<img src="/api/proxy/image?url=' + encodeURIComponent(u.avatar) + '" height="30">' : '') + '</td>' +
+        '<td>' + (canDelete ? '<button onclick="deleteUser(' + u.id + ')">Delete</button>' : '') + '</td>';
       tbody.appendChild(tr);
     });
   }
@@ -171,7 +228,119 @@
     } catch (e) { setStatus('Error: ' + e.message); }
   }
 
+  async function submitXml() {
+    const xml = document.getElementById('xml-input').value;
+    const el = document.getElementById('xml-result');
+    try {
+      const res = await fetch('/api/xml/validate-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain', 'Authorization': 'Bearer ' + accessToken },
+        body: xml
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        el.textContent = 'Saved successfully:\n' + JSON.stringify(data, null, 2);
+        el.style.color = 'green';
+        loadUsers();
+      } else {
+        el.textContent = 'Validation errors:\n' + JSON.stringify(data?.errors || data, null, 2);
+        el.style.color = 'red';
+      }
+      el.classList.remove('hidden');
+    } catch (e) { el.textContent = 'Error: ' + e.message; el.classList.remove('hidden'); }
+  }
+
+  async function submitJson() {
+    const json = document.getElementById('json-input').value;
+    const el = document.getElementById('json-result');
+    try {
+      const res = await fetch('/api/json/validate-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain', 'Authorization': 'Bearer ' + accessToken },
+        body: json
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        el.textContent = 'Saved successfully:\n' + JSON.stringify(data, null, 2);
+        el.style.color = 'green';
+        loadUsers();
+      } else {
+        el.textContent = 'Validation errors:\n' + JSON.stringify(data?.errors || data, null, 2);
+        el.style.color = 'red';
+      }
+      el.classList.remove('hidden');
+    } catch (e) { el.textContent = 'Error: ' + e.message; el.classList.remove('hidden'); }
+  }
+
+  async function generateXmlForValidation() {
+    const el = document.getElementById('jakarta-gen-status');
+    el.textContent = 'Generating...';
+    try {
+      const res = await fetch('/api/xml/generate?page=1', {
+        headers: { 'Authorization': 'Bearer ' + accessToken }
+      });
+      if (!res.ok) { el.textContent = 'Failed: ' + res.status; return; }
+      el.textContent = 'XML generated. Ready to validate.';
+    } catch (e) { el.textContent = 'Error: ' + e.message; }
+  }
+
+  async function jakartaValidate() {
+    const el = document.getElementById('jakarta-result');
+    try {
+      const res = await fetch('/api/xml/jakarta-validate', {
+        headers: { 'Authorization': 'Bearer ' + accessToken }
+      });
+      const data = await res.json();
+      el.textContent = JSON.stringify(data, null, 2);
+      el.style.color = data.errors ? 'red' : 'green';
+      el.classList.remove('hidden');
+    } catch (e) { el.textContent = 'Error: ' + e.message; el.classList.remove('hidden'); }
+  }
+
+  async function generateXml() {
+    const el = document.getElementById('xml-gen-status');
+    el.textContent = 'Generating...';
+    try {
+      const res = await fetch('/api/xml/generate?page=1', {
+        headers: { 'Authorization': 'Bearer ' + accessToken }
+      });
+      if (!res.ok) { el.textContent = 'Failed: ' + res.status; return; }
+      el.textContent = 'XML generated. Ready to search.';
+    } catch (e) { el.textContent = 'Error: ' + e.message; }
+  }
+
+  async function soapSearch() {
+    const term = document.getElementById('soap-term').value;
+    const el = document.getElementById('soap-result');
+    const envelope =
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://algebra.hr/soap/users">' +
+        '<soapenv:Body>' +
+          '<tns:searchUsersRequest>' +
+            '<searchTerm>' + term + '</searchTerm>' +
+          '</tns:searchUsersRequest>' +
+        '</soapenv:Body>' +
+      '</soapenv:Envelope>';
+    try {
+      const res = await fetch('/ws', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/xml', 'SOAPAction': '' },
+        body: envelope
+      });
+      const text = await res.text();
+      const match = text.match(/<result>([\s\S]*?)<\/result>/);
+      if (match) {
+        const unescaped = match[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+        el.textContent = unescaped || '(no matches)';
+      } else {
+        el.textContent = text;
+      }
+      el.classList.remove('hidden');
+    } catch (e) { el.textContent = 'Error: ' + e.message; el.classList.remove('hidden'); }
+  }
+
   async function gqlQueryUsers() {
+    const el = document.getElementById('gql-result');
     try {
       const res = await fetch('/graphql', {
         method: 'POST',
@@ -179,8 +348,9 @@
         body: JSON.stringify({ query: '{ users { id email firstName lastName } }' })
       });
       const data = await res.json();
-      document.getElementById('gql-result').textContent = JSON.stringify(data, null, 2);
-    } catch (e) { document.getElementById('gql-result').textContent = 'Error: ' + e.message; }
+      el.textContent = JSON.stringify(data, null, 2);
+      el.classList.remove('hidden');
+    } catch (e) { el.textContent = 'Error: ' + e.message; el.classList.remove('hidden'); }
   }
 
   async function getWeather() {
@@ -190,15 +360,17 @@
       const res = await fetch('/api/weather?station=' + encodeURIComponent(station), {
         headers: { 'Authorization': 'Bearer ' + accessToken }
       });
-      if (!res.ok) { el.textContent = 'Failed: ' + res.status; el.classList.remove('hidden'); return; }
-      const data = await res.json();
-      el.innerHTML =
-        '<strong>' + data.station + '</strong><br>' +
-        'Temperature: ' + data.temperature + '<br>' +
-        'Description: ' + data.description + '<br>' +
-        'Time: ' + data.timestamp;
+      if (!res.ok) { el.innerHTML = 'Failed: ' + res.status; el.classList.remove('hidden'); return; }
+      const results = await res.json();
+      if (!results.length) { el.innerHTML = '(no matches)'; el.classList.remove('hidden'); return; }
+      let html = '<table><thead><tr><th>Station</th><th>Temperature</th><th>Description</th><th>Time</th></tr></thead><tbody>';
+      results.forEach(d => {
+        html += '<tr><td>' + d.station + '</td><td>' + d.temperature + '</td><td>' + d.description + '</td><td>' + d.timestamp + '</td></tr>';
+      });
+      html += '</tbody></table>';
+      el.innerHTML = html;
       el.classList.remove('hidden');
-    } catch (e) { el.textContent = 'Error: ' + e.message; el.classList.remove('hidden'); }
+    } catch (e) { el.innerHTML = 'Error: ' + e.message; el.classList.remove('hidden'); }
   }
 </script>
 </body>

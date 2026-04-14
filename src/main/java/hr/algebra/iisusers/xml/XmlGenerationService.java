@@ -63,6 +63,7 @@ public class XmlGenerationService {
 
     // Returns the XML from the most recent generateFromReqRes call.
     // Returns null if generate has not been called yet.
+
     public String getLastGeneratedXml() {
         return lastGeneratedXml;
     }

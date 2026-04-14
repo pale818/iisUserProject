@@ -50,9 +50,11 @@ public class UserSoapService {
         Document doc = builder.parse(new InputSource(new StringReader(xml)));
 
         // Use XPath to find all <user> elements where firstName or lastName contains the search term.
-        String term = request.getSearchTerm();
+        // translate() converts to lowercase so the search is case-insensitive (XPath 1.0 has no lower-case()).
+        String term = request.getSearchTerm().toLowerCase();
         XPath xpath = XPathFactory.newInstance().newXPath();
-        String expression = "//user[contains(firstName,'" + term + "') or contains(lastName,'" + term + "')]";
+        String expression = "//user[contains(translate(firstName,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'" + term + "')" +
+                " or contains(translate(lastName,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'" + term + "')]";
         NodeList matched = (NodeList) xpath.evaluate(expression, doc, XPathConstants.NODESET);
 
         // Serialize the matched nodes back to an XML string.

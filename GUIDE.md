@@ -989,3 +989,53 @@ Planned approach:
 ### Important note for this project
 
 Keep the design simple. This is a student project, so the goal is not enterprise architecture. The goal is to satisfy the assignment requirements clearly, with code that is easy to understand and easy to demo.
+
+---
+
+## How Spring Security works in this project
+
+### How SecurityFilterChain is applied
+
+`SecurityFilterChain` is a `@Bean`. Spring Boot auto-detects it and registers it as a Servlet filter that wraps every incoming HTTP request. You do not call it — Spring calls it automatically before your controllers ever see the request.
+
+Flow per request:
+
+```
+HTTP Request
+    │
+    ▼
+JwtFilter  (your custom filter)
+    │  reads Authorization: Bearer <token> from the header
+    │  validates the token with JwtService
+    │  loads the user from AppUserDetailsService  ← hits DB once per request
+    │  puts UsernamePasswordAuthenticationToken into SecurityContextHolder
+    ▼
+Spring Security authorization check
+    │  reads the rules from authorizeHttpRequests(...)
+    │  checks the role stored in the Authentication object
+    │  allows or blocks (403 / 401)
+    ▼
+Your Controller (@RestController / @Controller)
+```
+
+### Where the role is stored — is it fetched every time?
+
+Yes, the role is fetched from the database on every request.
+
+Inside `JwtFilter`:
+1. The JWT token is validated and the `username` is extracted from it (the `sub` claim).
+2. `AppUserDetailsService.loadUserByUsername(username)` is called.
+3. That hits `AppUserRepository.findByUsername(...)` — one DB read.
+4. The `role` column value from the `app_users` table is converted to a `GrantedAuthority` (e.g. `ROLE_FULL_ACCESS`).
+5. That authority is placed into `SecurityContextHolder` for the duration of the request, then discarded.
+
+There is no session (`SessionCreationPolicy.STATELESS`), so nothing is cached between requests.
+
+### Summary
+
+| What | Where it lives |
+|------|----------------|
+| Username | Inside the JWT token (the `sub` claim) |
+| Role | In the `app_users` table — re-read from DB on every request |
+| Authentication object | `SecurityContextHolder` — lives only for one request thread |
+| Token expiry | Checked by `JwtService.isTokenValid()` on every request |

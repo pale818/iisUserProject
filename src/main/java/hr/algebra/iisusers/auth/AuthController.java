@@ -40,7 +40,7 @@ public class AuthController {
         user.setRefreshToken(refreshToken);
         userRepo.save(user);
 
-        return ResponseEntity.ok(new AuthResponse(accessToken, refreshToken));
+        return ResponseEntity.ok(new AuthResponse(accessToken, refreshToken, user.getRole()));
     }
 
     // Refresh: send the refresh token in the body, get a new access token back.

@@ -1,3 +1,3 @@
 package hr.algebra.iisusers.auth;
 
-public record AuthResponse(String accessToken, String refreshToken) {}
+public record AuthResponse(String accessToken, String refreshToken, String role) {}

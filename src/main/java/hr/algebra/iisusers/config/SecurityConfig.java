@@ -39,7 +39,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Public: login, refresh, H2 console, WSDL, XML/JSON validation, GUI
                         .requestMatchers("/auth/**", "/h2-console/**", "/ws/**",
-                                "/api/xml/**", "/api/json/**", "/graphiql/**", "/", "/index.html").permitAll()
+                                "/api/xml/**", "/api/json/**", "/api/proxy/**",
+                                "/graphiql/**", "/", "/index.html").permitAll()
                         // GET endpoints: both roles can read
                         .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("READ_ONLY", "FULL_ACCESS")
                         // GraphQL (always POST): both roles can query/mutate

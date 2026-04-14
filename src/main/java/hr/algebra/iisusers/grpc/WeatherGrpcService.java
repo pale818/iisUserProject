@@ -21,17 +21,23 @@ public class WeatherGrpcService extends WeatherServiceGrpc.WeatherServiceImplBas
 
     @Override
     public void getWeather(WeatherProto.WeatherRequest request,
-                           StreamObserver<WeatherProto.WeatherResponse> responseObserver) {
-        WeatherFetchService.WeatherData data = weatherFetchService.fetchWeather(request.getStation());
+                           StreamObserver<WeatherProto.WeatherListResponse> responseObserver) {
 
-        WeatherProto.WeatherResponse response = WeatherProto.WeatherResponse.newBuilder()
-                .setStation(data.station())
-                .setTemperature(data.temperature())
-                .setDescription(data.description())
-                .setTimestamp(data.timestamp())
-                .build();
+        var results = weatherFetchService.fetchWeather(request.getStation());
 
-        responseObserver.onNext(response);
+        WeatherProto.WeatherListResponse.Builder listBuilder = WeatherProto.WeatherListResponse.newBuilder();
+
+        for (WeatherFetchService.WeatherData data : results) {
+            WeatherProto.WeatherResponse response = WeatherProto.WeatherResponse.newBuilder()
+                    .setStation(data.station())
+                    .setTemperature(data.temperature())
+                    .setDescription(data.description())
+                    .setTimestamp(data.timestamp())
+                    .build();
+            listBuilder.addResults(response);
+        }
+
+        responseObserver.onNext(listBuilder.build());
         responseObserver.onCompleted();
     }
 }
