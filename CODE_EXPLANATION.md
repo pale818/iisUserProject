@@ -1,5 +1,32 @@
 # Code Explanation
 
+## What starts first when you run the app
+
+```
+1. JVM starts
+       └─ runs main() in IisUsersProjectApplication.java
+
+2. Spring Boot takes over (SpringApplication.run())
+       └─ scans all classes (@Component, @Service, @Controller, @Configuration)
+       └─ creates all beans and wires dependencies together
+       └─ runs @Configuration classes
+            └─ SecurityConfig builds the filter chain and authorization rules into memory
+       └─ runs CommandLineRunner
+            └─ seeds admin and reader users into H2 if they don't exist yet
+
+3. Spring Boot starts embedded Tomcat
+       └─ registers the filter chain (including JwtFilter) into Tomcat
+       └─ registers the Spring MVC dispatcher servlet into Tomcat
+
+4. Tomcat starts listening on port 8080
+       └─ app prints "Started IisUsersProjectApplication in X seconds"
+       └─ ready to accept HTTP requests
+```
+
+Tomcat is embedded inside Spring Boot — you don't install it separately. Spring starts it programmatically as the last step of its own startup. Every HTTP request after this goes through Tomcat → filter chain → your controllers.
+
+---
+
 This project exposes the same user data through four different communication technologies:
 - **REST** — the standard way web apps talk to backends (JSON over HTTP)
 - **SOAP** — an older, XML-based protocol used in enterprise systems
@@ -50,6 +77,57 @@ Short access token expiry limits damage if stolen — it stops working quickly. 
 
 ---
 
+---
+
+## 1.2 How the first users were created (no GUI, no JWT)
+
+Before anyone can log in, the users `admin` and `reader` must already exist in the database. They were never created through the GUI — they were **seeded automatically at startup** by the application itself.
+
+### What is a CommandLineRunner?
+
+`CommandLineRunner` is a Spring Boot interface. If you declare a `@Bean` that returns a `CommandLineRunner`, Spring runs that code **immediately after the application starts**, before it accepts any HTTP requests. It runs once every time the app starts.
+
+### Startup seeding call flow
+
+```
+App starts (mvn spring-boot:run)
+  │
+  ▼
+Spring Boot initializes all beans
+  │
+  ▼
+IisUsersProjectApplication.seedUsers()        [IisUsersProjectApplication.java]
+  └─ CommandLineRunner runs automatically
+  └─ AppUserRepository.findByUsername("reader")
+       └─ SELECT * FROM app_users WHERE username = 'reader'
+       └─ if empty (first run) → user does not exist yet
+  └─ AppUser.builder()
+       .username("reader")
+       .password(encoder.encode("reader123"))   ← BCrypt hashes the password
+       .role("READ_ONLY")
+       .build()
+  └─ AppUserRepository.save(reader)
+       └─ INSERT INTO app_users (username, password, role) VALUES (...)
+  └─ same check + insert for "admin" / "admin123" / "FULL_ACCESS"
+  │
+  ▼
+App is now ready to accept HTTP requests
+```
+
+**No JWT is involved here at all.** JWT is only used after login — it proves who you are on subsequent requests. Creating the initial users is a one-time internal operation that happens inside the server before any client connects.
+
+**The `if (repo.findByUsername(...).isEmpty())` check** prevents duplicate inserts. If the app is restarted and the H2 file database already has these users, the inserts are skipped.
+
+**BCrypt** is a password hashing algorithm. The plain text `"admin123"` is never stored. Instead, a hash like `$2a$10$...` is stored. When you log in, BCrypt re-hashes what you typed and compares it to the stored hash — the original password is never recoverable.
+
+**Files involved:**
+- `IisUsersProjectApplication.java` — contains the `CommandLineRunner` bean that seeds users
+- `AppUser.java` — the JPA entity with `@Builder` (Lombok) for the builder pattern
+- `AppUserRepository.java` — JPA interface used to check existence and save
+- `SecurityConfig.java` — provides the `PasswordEncoder` (BCrypt) bean that is injected here
+
+---
+
 ### Login call flow
 
 **Trigger:** User fills in username + password in the GUI and clicks Login.
@@ -59,28 +137,66 @@ Browser
   └─ POST /auth/login  { username, password }
        │
        ▼
-AuthController.login()                         [auth/AuthController.java]
-  └─ authManager.authenticate(username, password)
+AuthController.login()                              [auth/AuthController.java]
+  └─ authManager.authenticate(
+         new UsernamePasswordAuthenticationToken("admin", "admin123")
+     )
        │
        ▼
-AppUserDetailsService.loadUserByUsername()     [auth/AppUserDetailsService.java]
-  └─ AppUserRepository.findByUsername()        [auth/AppUserRepository.java]
-       └─ SELECT * FROM app_users WHERE username = ?   [H2 database]
-       └─ returns AppUser entity
-  └─ converts role string to GrantedAuthority
-       └─ "FULL_ACCESS" → ROLE_FULL_ACCESS
-       └─ "READ_ONLY"   → ROLE_READ_ONLY
-  └─ returns UserDetails object to Spring Security
+AuthenticationManager  (Spring built-in, wired in SecurityConfig)
+  └─ loops through registered AuthenticationProviders
+  └─ finds DaoAuthenticationProvider
+       (registered in SecurityConfig via authenticationProvider() bean,
+        with your AppUserDetailsService and PasswordEncoder injected into it)
        │
-       ▼ (Spring Security checks password using BCrypt)
-AuthController.login()  (continues)
-  └─ JwtService.generateAccessToken(username)  [auth/JwtService.java]
-       └─ builds JWT: subject=username, expiry=15min, signed with secret key
-  └─ JwtService.generateRefreshToken(username)
-       └─ builds JWT: subject=username, expiry=7days
-  └─ AppUserRepository.save(user with refreshToken)
-       └─ UPDATE app_users SET refresh_token = ? WHERE username = ?
-  └─ returns AuthResponse { accessToken, refreshToken, role }
+       ▼
+DaoAuthenticationProvider  (Spring built-in, you never wrote this)
+  └─ calls AppUserDetailsService.loadUserByUsername("admin")
+       │  ← Spring calls YOUR service here, not your controller
+       ▼
+  AppUserDetailsService.loadUserByUsername()        [auth/AppUserDetailsService.java]
+    └─ AppUserRepository.findByUsername("admin")    [auth/AppUserRepository.java]
+         └─ SELECT * FROM app_users WHERE username = 'admin'
+         └─ returns AppUser entity { username, "$2a$10$...", "FULL_ACCESS" }
+    └─ new SimpleGrantedAuthority("ROLE_FULL_ACCESS")
+    └─ return new org.springframework.security.core.userdetails.User(
+           username,           // "admin"
+           "$2a$10$...",        // BCrypt hash from DB
+           [ROLE_FULL_ACCESS]  // authority list
+       )
+       │  ← this UserDetails goes back to DaoAuthenticationProvider
+       ▼
+DaoAuthenticationProvider  (continues)
+  └─ passwordEncoder.matches("admin123", "$2a$10$...")
+       └─ passwordEncoder is YOUR BCryptPasswordEncoder bean from SecurityConfig
+            (injected via provider.setPasswordEncoder(passwordEncoder()))
+       └─ BCrypt re-hashes "admin123" and compares → true or false
+  └─ if false → throws BadCredentialsException
+       └─ AuthController catches AuthenticationException → returns 401
+  └─ if true  → builds and returns:
+       new UsernamePasswordAuthenticationToken(
+           userDetails,                    // the UserDetails object
+           null,                           // credentials cleared for security
+           userDetails.getAuthorities()    // [ROLE_FULL_ACCESS]
+       )
+       │  ← this Authentication object travels back up the call stack
+       ▼
+AuthenticationManager returns Authentication to AuthController
+       │
+       ▼
+AuthController.login()  (continues — ignores the returned Authentication object)
+  └─ does its OWN second DB call to get the AppUser entity:
+  └─ userRepo.findByUsername("admin")
+       └─ SELECT * FROM app_users WHERE username = 'admin'
+       └─ returns AppUser (needed for role, refreshToken field)
+  └─ JwtService.generateAccessToken("admin")       [auth/JwtService.java]
+       └─ builds JWT: subject="admin", expiry=15min, signed with secret key
+  └─ JwtService.generateRefreshToken("admin")
+       └─ builds JWT: subject="admin", expiry=7days
+  └─ user.setRefreshToken(refreshToken)
+  └─ AppUserRepository.save(user)
+       └─ UPDATE app_users SET refresh_token = ? WHERE username = 'admin'
+  └─ return AuthResponse { accessToken, refreshToken, role="FULL_ACCESS" }
        │
        ▼
 Browser receives:
@@ -92,51 +208,119 @@ Browser receives:
   └─ stores accessToken and role in JS variables (memory only, not localStorage)
 ```
 
+**Why does AuthController do a second DB call?**
+`authManager.authenticate()` returns an `Authentication` object — but that contains Spring's own `UserDetails` type, not your `AppUser` entity. `UserDetails` has no `refreshToken` field and no `role` string. To save the refresh token and build the response, the controller needs the real `AppUser` — so it fetches it again. The first call was purely a password check.
+
 **Files involved:**
 - `AuthController.java` — handles `POST /auth/login`, orchestrates the flow
-- `AppUserDetailsService.java` — loads user from DB for Spring Security
+- `SecurityConfig.java` — registers `DaoAuthenticationProvider` with your `AppUserDetailsService` and `PasswordEncoder` injected into it
+- `DaoAuthenticationProvider` — Spring built-in, calls your service and runs BCrypt
+- `AppUserDetailsService.java` — YOUR code, called by Spring to load user from DB
 - `AppUserRepository.java` — JPA interface, Spring generates the SQL automatically
 - `JwtService.java` — creates and validates JWT tokens
 - `AppUser.java` — the JPA entity (maps to `app_users` table in H2)
-- `AuthRequest.java` — DTO (data transfer object) for the request body `{ username, password }`
+- `AuthRequest.java` — DTO for the request body `{ username, password }`
 - `AuthResponse.java` — DTO for the response `{ accessToken, refreshToken, role }`
+
+---
+
+### How SecurityConfig is loaded — startup, not per request
+
+`SecurityConfig` is **not called when a request arrives**. It runs once at application startup, before any request ever comes in.
+
+It is annotated with `@Configuration`, which tells Spring: *"read this class at startup and execute all `@Bean` methods to build the application context."*
+
+```
+App starts
+  │
+  ▼
+Spring scans all classes with @Configuration, @Component, @Service, etc.
+  │
+  ▼
+SecurityConfig is found (@Configuration)
+  └─ securityFilterChain() @Bean is called
+       └─ builds the filter chain with all the rules:
+            - which URLs are public
+            - which roles are required for which methods
+            - which filters run and in what order
+            - registers JwtFilter BEFORE UsernamePasswordAuthenticationFilter
+       └─ the built SecurityFilterChain is stored in memory
+  └─ authenticationProvider() @Bean is called
+       └─ creates DaoAuthenticationProvider
+       └─ injects AppUserDetailsService into it
+       └─ injects BCryptPasswordEncoder into it
+       └─ stored in memory
+  └─ passwordEncoder() @Bean is called
+       └─ creates BCryptPasswordEncoder instance
+       └─ stored in memory
+  └─ grpcAuthenticationReader() @Bean is called
+│
+▼
+App is now ready — all rules and filters are wired up in memory
+```
+
+The rules you wrote in `authorizeHttpRequests(...)` are compiled into a data structure once. Every incoming request is then checked against that structure — Spring doesn't re-read `SecurityConfig` for each request.
 
 ---
 
 ### How every subsequent request is protected
 
-After login, every request to `/api/**` must include the token. The `JwtFilter` intercepts every request before it reaches any controller.
+After login, every request to `/api/**` must include the token. Here is the full path from the browser to the controller, including how `JwtFilter` gets called.
 
 ```
-Browser
+App is already running — SecurityConfig ran at startup, filter chain is wired
+       │
+Browser sends:
   └─ GET /api/users
        Header: Authorization: Bearer eyJ...
        │
        ▼
-JwtFilter.doFilterInternal()                   [auth/JwtFilter.java]
-  └─ reads Authorization header
-  └─ extracts token: "eyJ..."
-  └─ JwtService.extractUsername(token)
-       └─ decodes JWT payload → "admin"
+Tomcat (embedded servlet container inside Spring Boot)
+  └─ receives the raw HTTP request
+  └─ passes it through its registered filter chain
+  └─ one of those filters is JwtFilter
+       └─ registered because:
+            1. JwtFilter has @Component → Spring created it as a bean at startup
+            2. SecurityConfig called .addFilterBefore(jwtFilter, ...) at startup
+               → this placed it at the correct position in the chain
+       │
+       ▼
+JwtFilter.doFilterInternal()                        [auth/JwtFilter.java]
+  └─ called automatically by Tomcat's filter chain — you never call it directly
+  └─ reads Authorization header → "Bearer eyJ..."
+  └─ strips "Bearer " prefix → token = "eyJ..."
+  └─ JwtService.extractUsername(token)              [auth/JwtService.java]
+       └─ base64-decodes the JWT payload
+       └─ reads "sub" claim → "admin"
   └─ JwtService.isTokenValid(token)
-       └─ checks expiry timestamp in token payload
-  └─ AppUserDetailsService.loadUserByUsername("admin")
+       └─ reads "exp" claim → checks against current time
+       └─ if expired → does nothing, request continues unauthenticated → 401 later
+  └─ AppUserDetailsService.loadUserByUsername("admin")  [auth/AppUserDetailsService.java]
        └─ AppUserRepository.findByUsername("admin")
             └─ SELECT * FROM app_users WHERE username = 'admin'
-       └─ returns user with role ROLE_FULL_ACCESS
-  └─ puts UsernamePasswordAuthenticationToken into SecurityContextHolder
-       └─ this tells Spring Security "this request is authenticated as admin with ROLE_FULL_ACCESS"
+            └─ returns AppUser with role "FULL_ACCESS"
+       └─ builds UserDetails with authority ROLE_FULL_ACCESS
+  └─ builds UsernamePasswordAuthenticationToken(userDetails, null, [ROLE_FULL_ACCESS])
+  └─ SecurityContextHolder.getContext().setAuthentication(token)
+       └─ stores the authentication for this request thread
+       └─ this is how Spring Security knows who is making this request
+  └─ filterChain.doFilter()
+       └─ passes the request to the next filter in the chain
        │
        ▼
-SecurityConfig — authorization check                [config/SecurityConfig.java]
-  └─ is this a GET /api/**?  → requires ROLE_READ_ONLY or ROLE_FULL_ACCESS → ALLOWED
-  └─ is this a POST /api/**? → requires ROLE_FULL_ACCESS → check role → allow or 403
+Spring Security authorization filter  (built from SecurityConfig rules at startup)
+  └─ reads authentication from SecurityContextHolder
+       └─ finds ROLE_FULL_ACCESS
+  └─ checks the request: GET /api/users
+       └─ rule: GET /api/** → requires ROLE_READ_ONLY or ROLE_FULL_ACCESS
+       └─ ROLE_FULL_ACCESS matches → ALLOWED
+  └─ if role did not match → returns 403, controller never reached
        │
        ▼
-UserController (if allowed)                     [users/controller/UserController.java]
+UserController.getAllLocalUsers()               [users/controller/UserController.java]
 ```
 
-**Important:** The role is re-read from the database on every single request. The JWT only carries the username — the role always comes from the DB.
+**Important:** The role is re-read from the database on every single request. The JWT only carries the username — the role always comes from the DB. `SecurityContextHolder` only holds the authentication for the duration of one request thread — it is cleared after the response is sent.
 
 ---
 
@@ -163,7 +347,7 @@ AuthController.refresh()
 
 ---
 
-## 1.2 User Roles
+## 1.3 User Roles
 
 Two roles exist in this project:
 
@@ -186,7 +370,9 @@ Two pre-seeded users are created at startup in `IisUsersProjectApplication.java`
 
 ---
 
-## 1.3 Custom REST CRUD API (Local H2 Database)
+## 1.4 Custom REST CRUD API (Local H2 Database)
+
+> **Note:** Every flow below goes through `JwtFilter` and the Spring Security authorization check before reaching any controller. That full process is described once in section 1.3. It is not repeated in each flow here to avoid repetition — but it always runs.
 
 ### What is JPA?
 
@@ -280,7 +466,9 @@ UserController.deleteLocalUser(id=3)
 
 ---
 
-## 1.4 Fetching from ReqRes (Public API)
+## 1.5 Fetching from ReqRes (Public API)
+
+> **Note:** Same as section 1.4 — `JwtFilter` and the authorization check always run first. Not repeated here.
 
 ReqRes is a public demo REST API that provides fake user data. This project fetches from it to populate the XML for SOAP, and to show a live external data source.
 
@@ -308,7 +496,9 @@ UserController.getPublicUsers(page=1)
 
 ---
 
-## 1.5 XML and JSON Validation + Save
+## 1.6 XML and JSON Validation + Save
+
+> **Note:** Same as section 1.4 — `JwtFilter` and the authorization check always run first. Not repeated here.
 
 ### What is XSD / JSON Schema?
 
@@ -429,6 +619,8 @@ If any of these don't match, Spring WS can't route the SOAP message to the right
 
 ## 2.3 XML Generation call flow
 
+> **Note:** This is a `GET /api/xml/generate` request — `JwtFilter` and the authorization check run first (see section 1.3). Both roles are allowed to call this.
+
 Before SOAP search can work, the backend needs an XML file containing users. This is generated from the ReqRes public API.
 
 ```
@@ -471,6 +663,8 @@ This XML is stored in memory in `XmlGenerationService.lastGeneratedXml`. The SOA
 ---
 
 ## 2.4 SOAP Search with XPath call flow
+
+> **Note:** SOAP requests go to `/ws` which is declared `permitAll()` in `SecurityConfig` — no JWT required. The SOAP servlet handles its own message routing, separate from the Spring MVC filter chain.
 
 XPath (XML Path Language) is a query language for XML — like SQL but for XML documents. Instead of `SELECT * FROM users WHERE firstName LIKE 'george'` you write `//user[contains(firstName,'george')]`.
 
@@ -526,6 +720,8 @@ Browser receives SOAP response, extracts <result> content, displays it
 ---
 
 ## 2.5 Jakarta XML Validation call flow
+
+> **Note:** This is a `GET /api/xml/jakarta-validate` request — `JwtFilter` and the authorization check run first (see section 1.3). Both roles are allowed.
 
 Jakarta XML Bind (JAXB) is the Java standard for converting between XML and Java objects. It can also validate XML against an XSD schema during the conversion process, collecting any rule violations as `ValidationEvent` messages.
 
@@ -620,6 +816,8 @@ Your `WeatherGrpcService.java` extends this generated base class and overrides `
 ---
 
 ## 3.2 Weather gRPC call flow
+
+> **Note:** The REST wrapper (`GET /api/weather`) goes through `JwtFilter` and the authorization check first (see section 1.3) — both roles are allowed. The gRPC server on port 9090 bypasses the HTTP filter chain entirely — it has its own `GrpcAuthenticationReader` bean in `SecurityConfig` that returns null (anonymous), so all gRPC calls are allowed without a token.
 
 Because browsers cannot speak gRPC natively, the project includes a REST wrapper (`WeatherRestController`) that translates between HTTP/JSON and the internal gRPC service.
 
@@ -728,6 +926,8 @@ Spring Boot reads this file automatically at startup and sets up the GraphQL eng
 
 ## 4.2 GraphQL query call flow
 
+> **Note:** `POST /graphql` goes through `JwtFilter` and the authorization check first (see section 1.3). Both roles are allowed to query.
+
 ```
 Browser
   └─ POST /graphql
@@ -771,6 +971,8 @@ Browser receives:
 ---
 
 ## 4.3 GraphQL mutation call flow
+
+> **Note:** Same as 4.2 — `JwtFilter` runs first, both roles are allowed to mutate in this project.
 
 ```
 Browser
