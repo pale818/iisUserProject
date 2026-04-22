@@ -1,6 +1,13 @@
 # GUIDE
 
 API KEY: reqres_4069f4ecc3d746579c1633cc62e1b89c
+
+mvn clean compile —
+clean wipes
+
+actual gRPC service:
+grpcurl -plaintext -proto src/main/proto/weather.proto  -d '{"station": "Zagreb"}' localhost:9090 WeatherService/GetWeather
+
 ## Lecture References
 
 These class presentations are available as reference material for this project:

@@ -498,7 +498,7 @@ UserController.getPublicUsers(page=1)
 
 ## 1.6 XML and JSON Validation + Save
 
-> **Note:** Same as section 1.4 — `JwtFilter` and the authorization check always run first. Not repeated here.
+> **Note:** `/api/xml/**` and `/api/json/**` are under `permitAll()` in `SecurityConfig` — no token required to call these. `JwtFilter` still runs (it runs on every request) but since authorization is not required, it has no effect even if no token is present.
 
 ### What is XSD / JSON Schema?
 
@@ -619,7 +619,7 @@ If any of these don't match, Spring WS can't route the SOAP message to the right
 
 ## 2.3 XML Generation call flow
 
-> **Note:** This is a `GET /api/xml/generate` request — `JwtFilter` and the authorization check run first (see section 1.3). Both roles are allowed to call this.
+> **Note:** `GET /api/xml/generate` falls under `/api/xml/**` which is `permitAll()` — same as section 1.6, no token required.
 
 Before SOAP search can work, the backend needs an XML file containing users. This is generated from the ReqRes public API.
 
@@ -719,9 +719,29 @@ Browser receives SOAP response, extracts <result> content, displays it
 
 ---
 
+
+### What happens when `POST /ws` arrives?
+
+1. the servlet container receives the request
+2. because `/ws/*` was already registered at startup, the request is routed to `MessageDispatcherServlet`
+3. `MessageDispatcherServlet` reads the SOAP XML
+4. Spring WS matches the payload to the correct `@Endpoint` method
+5. then `UserSoapService.search(...)` is executed
+
+So:
+
+- startup time: bean methods run once
+- request time: the already-registered servlet handles the request
+
+Best short answer:
+
+“No. `ServletRegistrationBean` is executed at startup. On `POST /ws`, the already registered `MessageDispatcherServlet` handles the request and routes it to the SOAP endpoint.”
+
+
+
 ## 2.5 Jakarta XML Validation call flow
 
-> **Note:** This is a `GET /api/xml/jakarta-validate` request — `JwtFilter` and the authorization check run first (see section 1.3). Both roles are allowed.
+> **Note:** `GET /api/xml/jakarta-validate` falls under `/api/xml/**` which is `permitAll()` — same as section 1.6, no token required.
 
 Jakarta XML Bind (JAXB) is the Java standard for converting between XML and Java objects. It can also validate XML against an XSD schema during the conversion process, collecting any rule violations as `ValidationEvent` messages.
 
