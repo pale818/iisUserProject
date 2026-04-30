@@ -40,6 +40,7 @@ public class XmlGenerationService {
         Element root = doc.createElement("users");
         doc.appendChild(root);
 
+
         if (response != null && response.getData() != null) {
             for (ReqResUserDto dto : response.getData()) {
                 Element userEl = doc.createElement("user");

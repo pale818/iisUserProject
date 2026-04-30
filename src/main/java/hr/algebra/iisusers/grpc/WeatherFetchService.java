@@ -20,7 +20,7 @@ import java.util.List;
 @Service
 public class WeatherFetchService {
 
-    private static final String DHMZ_URL = "http://vrijeme.hr/hrvatska_n.xml";
+    private static final String DHMZ_URL = "https://vrijeme.hr/hrvatska_n.xml";
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -56,7 +56,7 @@ public class WeatherFetchService {
             if (first == null) first = el;
             String name = directText(el, "GradIme");
             if (name.toLowerCase().contains(requestedStation.toLowerCase())) {
-                matches.add(buildWeatherData(el, timestamp));
+                    matches.add(buildWeatherData(el, timestamp));
             }
         }
 

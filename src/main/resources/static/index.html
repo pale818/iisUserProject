@@ -51,12 +51,24 @@
 
   <!-- CREATE USER (local only, FULL_ACCESS only) -->
   <div id="create-section" class="hidden">
-    <h2>Create User (local)</h2>
+    <h2>Create User (local, REST POST)</h2>
     <input id="new-email"     placeholder="Email">
     <input id="new-firstname" placeholder="First Name">
     <input id="new-lastname"  placeholder="Last Name">
     <input id="new-avatar"    placeholder="Avatar URL">
     <button onclick="createUser()">Create</button>
+  </div>
+
+  <!-- UPDATE USER (local only, FULL_ACCESS only) -->
+  <div id="update-section" class="hidden">
+    <h2>Update User (local, REST PUT)</h2>
+    <input id="upd-id"        placeholder="User ID" style="width:80px">
+    <input id="upd-email"     placeholder="Email">
+    <input id="upd-firstname" placeholder="First Name">
+    <input id="upd-lastname"  placeholder="Last Name">
+    <input id="upd-avatar"    placeholder="Avatar URL">
+    <button onclick="updateUser()">Update</button>
+    <div id="update-result" class="result-box hidden"></div>
   </div>
 
   <!-- XML VALIDATION -->
@@ -73,25 +85,50 @@
   <button onclick="submitJson()">Validate &amp; Save</button>
   <div id="json-result" class="result-box hidden"></div>
 
-  <!-- JAKARTA XML VALIDATION -->
-  <h2>Jakarta XML Validation</h2>
-  <p style="margin:4px 0;font-size:13px;color:#555">Validates the last generated ReqRes XML against the XSD schema using Jakarta XML Bind.</p>
-  <button onclick="generateXmlForValidation()">1. Generate XML from ReqRes</button>
-  <span id="jakarta-gen-status" style="margin-left:8px;color:green"></span><br><br>
-  <button onclick="jakartaValidate()">2. Validate with Jakarta XML</button>
-  <div id="jakarta-result" class="result-box hidden"></div>
-
-  <!-- SOAP SEARCH -->
+  <!-- SOAP + JAKARTA XML VALIDATION (unified flow) -->
   <h2>SOAP — Search Users by Name</h2>
+  <p style="margin:4px 0;font-size:13px;color:#555">Generate XML from ReqRes, validate it with Jakarta XML Bind, then search via SOAP + XPath.</p>
   <button onclick="generateXml()">1. Generate XML from ReqRes</button>
   <span id="xml-gen-status" style="margin-left:8px;color:green"></span><br><br>
-  <input id="soap-term" placeholder="2. Search term (e.g. george)">
+  <button onclick="jakartaValidate()">2. Validate with Jakarta XML</button>
+  <div id="jakarta-result" class="result-box hidden"></div>
+  <br>
+  <input id="soap-term" placeholder="3. Search term (e.g. george)">
   <button onclick="soapSearch()">Search via SOAP</button>
   <div id="soap-result" class="result-box hidden"></div>
 
   <!-- GRAPHQL -->
-  <h2>GraphQL — User Query</h2>
-  <button onclick="gqlQueryUsers()">Query all users via GraphQL</button>
+  <h2>GraphQL</h2>
+  <p style="margin:4px 0;font-size:13px;color:#555">All operations go to <code>/graphql</code>.</p>
+
+  <b>Query all users</b><br>
+  <button onclick="gqlQueryUsers()">Query all users</button><br><br>
+
+  <b>Query user by ID</b><br>
+  <input id="gql-get-id" placeholder="User ID" style="width:80px">
+  <button onclick="gqlQueryUser()">Query user</button><br><br>
+
+  <div id="gql-mutation-section" class="hidden">
+    <b>Create user (mutation)</b><br>
+    <input id="gql-new-email"     placeholder="Email">
+    <input id="gql-new-firstname" placeholder="First Name">
+    <input id="gql-new-lastname"  placeholder="Last Name">
+    <input id="gql-new-avatar"    placeholder="Avatar URL">
+    <button onclick="gqlCreateUser()">Create</button><br><br>
+
+    <b>Update user (mutation)</b><br>
+    <input id="gql-upd-id"        placeholder="User ID" style="width:80px">
+    <input id="gql-upd-email"     placeholder="Email">
+    <input id="gql-upd-firstname" placeholder="First Name">
+    <input id="gql-upd-lastname"  placeholder="Last Name">
+    <input id="gql-upd-avatar"    placeholder="Avatar URL">
+    <button onclick="gqlUpdateUser()">Update</button><br><br>
+
+    <b>Delete user (mutation)</b><br>
+    <input id="gql-del-id" placeholder="User ID" style="width:80px">
+    <button onclick="gqlDeleteUser()">Delete</button><br><br>
+  </div>
+
   <div id="gql-result" class="result-box hidden"></div>
 
   <!-- WEATHER -->
@@ -105,8 +142,9 @@
 </div>
 
 <script>
-  let accessToken = null;
-  let userRole = null;
+  let accessToken  = null;
+  let refreshToken = null;
+  let userRole     = null;
 
   const XML_TEMPLATE =
 `<user>
@@ -140,21 +178,45 @@
       });
       if (!res.ok) { setError('Login failed: invalid credentials'); return; }
       const data = await res.json();
-      accessToken = data.accessToken;
-      userRole = data.role;
+      accessToken  = data.accessToken;
+      refreshToken = data.refreshToken;
+      userRole     = data.role;
       document.getElementById('login-section').classList.add('hidden');
       document.getElementById('app-section').classList.remove('hidden');
       setStatus('Logged in as ' + username + ' (' + userRole + ')');
       document.getElementById('create-section').classList.toggle('hidden', userRole !== 'FULL_ACCESS');
+      document.getElementById('update-section').classList.toggle('hidden', userRole !== 'FULL_ACCESS');
+      document.getElementById('gql-mutation-section').classList.toggle('hidden', userRole !== 'FULL_ACCESS');
       document.getElementById('xml-input').value = XML_TEMPLATE;
       document.getElementById('json-input').value = JSON_TEMPLATE;
       loadUsers();
     } catch (e) { setError('Login error: ' + e.message); }
   }
 
+  // Fetch wrapper: injects the access token, and on 401 tries to refresh once before giving up.
+  async function authFetch(url, options = {}) {
+    options.headers = { ...options.headers, 'Authorization': 'Bearer ' + accessToken };
+    let res = await fetch(url, options);
+    if (res.status !== 401) return res;
+
+    // Access token expired — try to get a new one using the refresh token.
+    const refreshRes = await fetch('/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: refreshToken
+    });
+
+    if (!refreshRes.ok) { logout(); return res; }
+
+    accessToken = await refreshRes.text();
+    options.headers['Authorization'] = 'Bearer ' + accessToken;
+    return fetch(url, options);
+  }
+
   function logout() {
-    accessToken = null;
-    userRole = null;
+    accessToken  = null;
+    refreshToken = null;
+    userRole     = null;
     document.getElementById('app-section').classList.add('hidden');
     document.getElementById('login-section').classList.remove('hidden');
     document.getElementById('users-body').innerHTML = '';
@@ -168,7 +230,7 @@
     const api = selectedApi();
     const url = api === 'local' ? '/api/users' : '/api/users/public';
     try {
-      const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + accessToken } });
+      const res = await authFetch(url);
       if (!res.ok) { setStatus('Failed to load users: ' + res.status); return; }
       const data = await res.json();
       const users = api === 'local' ? data : (data.data || []);
@@ -201,7 +263,7 @@
       avatar:    document.getElementById('new-avatar').value
     };
     try {
-      const res = await fetch('/api/users', {
+      const res = await authFetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
         body: JSON.stringify(user)
@@ -215,10 +277,31 @@
     } catch (e) { setStatus('Error: ' + e.message); }
   }
 
+  async function updateUser() {
+    const id = document.getElementById('upd-id').value;
+    const user = {
+      email:     document.getElementById('upd-email').value,
+      firstName: document.getElementById('upd-firstname').value,
+      lastName:  document.getElementById('upd-lastname').value,
+      avatar:    document.getElementById('upd-avatar').value
+    };
+    const el = document.getElementById('update-result');
+    try {
+      const res = await authFetch('/api/users/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+        body: JSON.stringify(user)
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); el.textContent = 'Update failed: ' + (err.error || res.status); el.style.color = 'red'; }
+      else { el.textContent = 'Updated: ' + JSON.stringify(await res.json(), null, 2); el.style.color = 'green'; loadUsers(); }
+      el.classList.remove('hidden');
+    } catch (e) { el.textContent = 'Error: ' + e.message; el.style.color = 'red'; el.classList.remove('hidden'); }
+  }
+
   async function deleteUser(id) {
     if (!confirm('Delete user ' + id + '?')) return;
     try {
-      const res = await fetch('/api/users/' + id, {
+      const res = await authFetch('/api/users/' + id, {
         method: 'DELETE',
         headers: { 'Authorization': 'Bearer ' + accessToken }
       });
@@ -232,7 +315,7 @@
     const xml = document.getElementById('xml-input').value;
     const el = document.getElementById('xml-result');
     try {
-      const res = await fetch('/api/xml/validate-save', {
+      const res = await authFetch('/api/xml/validate-save', {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain', 'Authorization': 'Bearer ' + accessToken },
         body: xml
@@ -254,7 +337,7 @@
     const json = document.getElementById('json-input').value;
     const el = document.getElementById('json-result');
     try {
-      const res = await fetch('/api/json/validate-save', {
+      const res = await authFetch('/api/json/validate-save', {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain', 'Authorization': 'Bearer ' + accessToken },
         body: json
@@ -272,22 +355,10 @@
     } catch (e) { el.textContent = 'Error: ' + e.message; el.classList.remove('hidden'); }
   }
 
-  async function generateXmlForValidation() {
-    const el = document.getElementById('jakarta-gen-status');
-    el.textContent = 'Generating...';
-    try {
-      const res = await fetch('/api/xml/generate?page=1', {
-        headers: { 'Authorization': 'Bearer ' + accessToken }
-      });
-      if (!res.ok) { el.textContent = 'Failed: ' + res.status; return; }
-      el.textContent = 'XML generated. Ready to validate.';
-    } catch (e) { el.textContent = 'Error: ' + e.message; }
-  }
-
   async function jakartaValidate() {
     const el = document.getElementById('jakarta-result');
     try {
-      const res = await fetch('/api/xml/jakarta-validate', {
+      const res = await authFetch('/api/xml/jakarta-validate', {
         headers: { 'Authorization': 'Bearer ' + accessToken }
       });
       const data = await res.json();
@@ -301,11 +372,11 @@
     const el = document.getElementById('xml-gen-status');
     el.textContent = 'Generating...';
     try {
-      const res = await fetch('/api/xml/generate?page=1', {
+      const res = await authFetch('/api/xml/generate?page=1', {
         headers: { 'Authorization': 'Bearer ' + accessToken }
       });
       if (!res.ok) { el.textContent = 'Failed: ' + res.status; return; }
-      el.textContent = 'XML generated. Ready to search.';
+      el.textContent = 'XML generated. Ready to validate and search.';
     } catch (e) { el.textContent = 'Error: ' + e.message; }
   }
 
@@ -322,7 +393,7 @@
         '</soapenv:Body>' +
       '</soapenv:Envelope>';
     try {
-      const res = await fetch('/ws', {
+      const res = await authFetch('/ws', {
         method: 'POST',
         headers: { 'Content-Type': 'text/xml', 'SOAPAction': '' },
         body: envelope
@@ -339,25 +410,70 @@
     } catch (e) { el.textContent = 'Error: ' + e.message; el.classList.remove('hidden'); }
   }
 
-  async function gqlQueryUsers() {
+  async function gql(query, variables) {
+    const res = await authFetch('/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+      body: JSON.stringify({ query, variables: variables || {} })
+    });
+    return res.json();
+  }
+
+  function showGql(data) {
     const el = document.getElementById('gql-result');
+    el.textContent = JSON.stringify(data, null, 2);
+    el.classList.remove('hidden');
+  }
+
+  async function gqlQueryUsers() {
+    try { showGql(await gql('{ users { id email firstName lastName avatar } }')); }
+    catch (e) { showGql({ error: e.message }); }
+  }
+
+  async function gqlQueryUser() {
+    const id = document.getElementById('gql-get-id').value;
+    try { showGql(await gql('query($id: ID!) { user(id: $id) { id email firstName lastName avatar } }', { id })); }
+    catch (e) { showGql({ error: e.message }); }
+  }
+
+  async function gqlCreateUser() {
+    const input = {
+      email:     document.getElementById('gql-new-email').value,
+      firstName: document.getElementById('gql-new-firstname').value,
+      lastName:  document.getElementById('gql-new-lastname').value,
+      avatar:    document.getElementById('gql-new-avatar').value
+    };
     try {
-      const res = await fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-        body: JSON.stringify({ query: '{ users { id email firstName lastName } }' })
-      });
-      const data = await res.json();
-      el.textContent = JSON.stringify(data, null, 2);
-      el.classList.remove('hidden');
-    } catch (e) { el.textContent = 'Error: ' + e.message; el.classList.remove('hidden'); }
+      showGql(await gql('mutation($input: UserInput!) { createUser(input: $input) { id email firstName lastName avatar } }', { input }));
+      loadUsers();
+    } catch (e) { showGql({ error: e.message }); }
+  }
+
+  async function gqlUpdateUser() {
+    const id    = document.getElementById('gql-upd-id').value;
+    const input = {
+      email:     document.getElementById('gql-upd-email').value,
+      firstName: document.getElementById('gql-upd-firstname').value,
+      lastName:  document.getElementById('gql-upd-lastname').value,
+      avatar:    document.getElementById('gql-upd-avatar').value
+    };
+    try {
+      showGql(await gql('mutation($id: ID!, $input: UserInput!) { updateUser(id: $id, input: $input) { id email firstName lastName avatar } }', { id, input }));
+      loadUsers();
+    } catch (e) { showGql({ error: e.message }); }
+  }
+
+  async function gqlDeleteUser() {
+    const id = document.getElementById('gql-del-id').value;
+    try { showGql(await gql('mutation($id: ID!) { deleteUser(id: $id) }', { id })); loadUsers(); }
+    catch (e) { showGql({ error: e.message }); }
   }
 
   async function getWeather() {
     const station = document.getElementById('station').value || 'Zagreb';
     const el = document.getElementById('weather-result');
     try {
-      const res = await fetch('/api/weather?station=' + encodeURIComponent(station), {
+      const res = await authFetch('/api/weather?station=' + encodeURIComponent(station), {
         headers: { 'Authorization': 'Bearer ' + accessToken }
       });
       if (!res.ok) { el.innerHTML = 'Failed: ' + res.status; el.classList.remove('hidden'); return; }

@@ -40,6 +40,16 @@ public class UserGraphQLController {
     }
 
     @MutationMapping
+    public User updateUser(@Argument Long id, @Argument Map<String, String> input) {
+        User user = new User();
+        user.setEmail(input.get("email"));
+        user.setFirstName(input.get("firstName"));
+        user.setLastName(input.get("lastName"));
+        user.setAvatar(input.getOrDefault("avatar", ""));
+        return userService.updateLocalUser(id, user);
+    }
+
+    @MutationMapping
     public String deleteUser(@Argument Long id) {
         userService.deleteLocalUser(id);
         return "User " + id + " deleted";

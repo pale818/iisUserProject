@@ -320,6 +320,41 @@ Spring Security authorization filter  (built from SecurityConfig rules at startu
 UserController.getAllLocalUsers()               [users/controller/UserController.java]
 ```
 
+Short sequence explanation (e.g., POST /api/users):
+1. **The Entrance (SecurityConfig starts)**
+   The request arrives. Spring looks at the Rule Book (SecurityConfig).
+   •
+   Rule says: "Before you do anything, run the JwtFilter."
+2. **The Verification (JwtFilter runs)**
+   The JwtFilter does the work you described:
+Extracts token,
+Validates it, 
+Fetches user from DB, 
+Action: It puts the auth object into the SecurityContextHolder. 
+Action: It says chain.doFilter (Move to next step).
+3. **The Doorbell (SecurityConfig checks the rules)**
+   Now that the Filter is done, Spring returns to the Rule Book (SecurityConfig) to finish the check.
+   •
+   The rule for POST /api/** says: hasRole("FULL_ACCESS").
+   •
+   Spring now checks the SecurityContextHolder (which the Filter just filled up!).
+   •
+   Spring sees: "Aha! The SecurityContextHolder has a user with ROLE_FULL_ACCESS."
+4. **The Result**
+   •
+   If the Filter filled the SecurityContextHolder correctly: The request is allowed to reach your Controller.
+   •
+   If the Filter failed (e.g., expired token): The SecurityContextHolder stays empty. Spring sees it's empty and blocks the request with a 403.
+   
+
+**The Timeline Summary:**
+1.Request arrives.
+2.SecurityConfig triggers the JwtFilter.
+3.JwtFilter fills the SecurityContextHolder.
+4.SecurityConfig checks the SecurityContextHolder against its rules.
+5.Controller runs (if rules passed).
+
+
 **Important:** The role is re-read from the database on every single request. The JWT only carries the username — the role always comes from the DB. `SecurityContextHolder` only holds the authentication for the duration of one request thread — it is cleared after the response is sent.
 
 ---

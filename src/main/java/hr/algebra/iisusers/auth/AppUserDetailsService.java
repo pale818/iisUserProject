@@ -20,13 +20,13 @@ public class AppUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        AppUser user = repo.findByUsername(username)
+        AppUser appUser = repo.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
         // Role stored as "READ_ONLY" or "FULL_ACCESS" — Spring expects "ROLE_" prefix
         return new User(
-                user.getUsername(),
-                user.getPassword(),
-                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole()))
+                appUser.getUsername(),
+                appUser.getPassword(),
+                List.of(new SimpleGrantedAuthority("ROLE_" + appUser.getRole()))
         );
     }
 }

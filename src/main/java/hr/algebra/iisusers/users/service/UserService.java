@@ -45,13 +45,13 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    // Update only the fields we currently keep in the local user model.
+    // Update only the fields provided — blank/null fields keep their existing value.
     public User updateLocalUser(Long id, User updatedUser) {
         User existingUser = getLocalUserById(id);
-        existingUser.setEmail(updatedUser.getEmail());
-        existingUser.setFirstName(updatedUser.getFirstName());
-        existingUser.setLastName(updatedUser.getLastName());
-        existingUser.setAvatar(updatedUser.getAvatar());
+        if (updatedUser.getEmail()     != null && !updatedUser.getEmail().isBlank())     existingUser.setEmail(updatedUser.getEmail());
+        if (updatedUser.getFirstName() != null && !updatedUser.getFirstName().isBlank()) existingUser.setFirstName(updatedUser.getFirstName());
+        if (updatedUser.getLastName()  != null && !updatedUser.getLastName().isBlank())  existingUser.setLastName(updatedUser.getLastName());
+        if (updatedUser.getAvatar()    != null && !updatedUser.getAvatar().isBlank())    existingUser.setAvatar(updatedUser.getAvatar());
         return userRepository.save(existingUser);
     }
 
@@ -90,4 +90,8 @@ public class UserService {
                 .retrieve()
                 .body(ReqResUsersResponse.class);
     }
+
+
+
+
 }
