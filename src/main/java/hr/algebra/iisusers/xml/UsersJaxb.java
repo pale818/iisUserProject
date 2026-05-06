@@ -8,12 +8,12 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 import java.util.ArrayList;
 import java.util.List;
 
-// JAXB-annotated class that mirrors the <users> element in user.xsd.
-// Used by XmlValidationService to validate the generated ReqRes XML (Jakarta XML requirement).
+// Wrapper class for unmarshalling a <users> document containing multiple <user> elements
 @XmlRootElement(name = "users")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class UsersJaxb {
 
+    // @XmlElement maps each <user> child element to an item in this list
     @XmlElement(name = "user")
     private List<UserJaxb> users = new ArrayList<>();
 

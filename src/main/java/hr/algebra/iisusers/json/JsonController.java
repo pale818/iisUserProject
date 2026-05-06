@@ -29,17 +29,16 @@ public class JsonController {
         this.objectMapper = objectMapper;
     }
 
-    // Receives a JSON body, validates it against user-schema.json,
-    // saves to the database if valid, returns errors if not. (Requirement 1)
     @PostMapping("/validate-save")
     public ResponseEntity<?> validateAndSave(@RequestBody String json) {
+        // Validate against user-schema.json before attempting to save
         List<String> errors = jsonValidationService.validate(json);
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("errors", errors));
         }
         try {
             User user = objectMapper.readValue(json, User.class);
-            user.setId(null); // let JPA assign the ID
+            user.setId(null); // ignore any ID in the request body — DB assigns it
             User saved = userService.saveLocalUser(user);
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
         } catch (Exception e) {

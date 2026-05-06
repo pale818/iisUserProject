@@ -15,25 +15,19 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
-// Uses Jakarta XML Bind (JAXB) + user.xsd for all XML validation.
-// validateUser  → validates a single <user> body before saving to DB (Requirement 1)
-// validateUsers → validates the generated <users> XML from ReqRes (Requirement 3)
 @Service
 public class XmlValidationService {
 
-    // Validates a single <user> XML string against user.xsd using JAXB.
-    // Returns a list of error messages. Empty list means valid.
+    // Entry point for validating a single <user> element (from the validate-save endpoint)
     public List<String> validateUser(String xml) {
         return doValidate(xml);
     }
 
-    // Validates the generated <users> XML string against user.xsd using JAXB.
-    // Returns a list of error messages. Empty list means valid.
+    // Entry point for validating a <users> document (from the jakarta-validate endpoint)
     public List<String> validateUsers(String xml) {
         return doValidate(xml);
     }
 
-    // Shared JAXB validation logic — works for both <user> and <users> root elements.
     private List<String> doValidate(String xml) {
         List<String> errors = new ArrayList<>();
         try {
@@ -41,15 +35,16 @@ public class XmlValidationService {
             URL schemaUrl = getClass().getClassLoader().getResource("user.xsd");
             Schema schema = sf.newSchema(schemaUrl);
 
-            // Include both JAXB classes so JAXB can resolve either root element.
+            // Attaching the schema to the Unmarshaller enables validation during unmarshalling (Jakarta XML Bind)
             JAXBContext context = JAXBContext.newInstance(UserJaxb.class, UsersJaxb.class);
             Unmarshaller unmarshaller = context.createUnmarshaller();
             unmarshaller.setSchema(schema);
-            // Collect all validation events instead of throwing on the first one.
+            // Return true to keep going after each error — collects all violations instead of stopping at the first
             unmarshaller.setEventHandler(event -> {
                 errors.add(event.getMessage());
                 return true;
             });
+            //validates against schema and turns it to java obj
             unmarshaller.unmarshal(new StringReader(xml));
         } catch (JAXBException e) {
             Throwable cause = e.getLinkedException() != null ? e.getLinkedException() : e;
@@ -60,8 +55,7 @@ public class XmlValidationService {
         return errors;
     }
 
-    // Parses a valid single-user XML into a User entity ready to be saved.
-    // Only call this after validateUser() returns an empty list.
+    // Parses a single <user> element into a JPA User entity to return it
     public User parseToUser(String xml) throws JAXBException {
         JAXBContext context = JAXBContext.newInstance(UserJaxb.class);
         Unmarshaller unmarshaller = context.createUnmarshaller();

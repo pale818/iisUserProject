@@ -4,7 +4,6 @@
            xmlns:tns="http://algebra.hr/soap/users"
            elementFormDefault="qualified">
 
-    <!-- Input: search term sent by the SOAP client -->
     <xs:element name="searchUsersRequest">
         <xs:complexType>
             <xs:sequence>
@@ -13,7 +12,6 @@
         </xs:complexType>
     </xs:element>
 
-    <!-- Output: XML string containing the matching users -->
     <xs:element name="searchUsersResponse">
         <xs:complexType>
             <xs:sequence>

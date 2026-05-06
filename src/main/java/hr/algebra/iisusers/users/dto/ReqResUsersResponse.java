@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
 
-// This DTO keeps only the parts of the ReqRes list response we currently care about.
+// Wraps the paginated response from GET https://reqres.in/api/users?page=N
 public class ReqResUsersResponse {
 
     private Integer page;

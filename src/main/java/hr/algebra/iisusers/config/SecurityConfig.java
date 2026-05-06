@@ -31,27 +31,25 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-                .csrf(csrf -> csrf.disable())
-                // H2 console uses frames — keep same-origin frames allowed
-                .headers(headers -> headers.frameOptions(f -> f.sameOrigin()))
-                // Stateless — JWT, no server session
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(csrf -> csrf.disable()) // safe because auth uses Bearer tokens, not browser cookies
+                .headers(headers -> headers.frameOptions(f -> f.sameOrigin())) // allows H2 console iframe
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // no HttpSession
                 .authorizeHttpRequests(auth -> auth
-                        // Public: login, refresh, H2 console, WSDL, XML/JSON validation, GUI
+                        // public endpoints — no token required
                         .requestMatchers("/auth/**", "/h2-console/**", "/ws/**",
-                                "/api/xml/**", "/api/json/**", "/api/proxy/**",
-                                "/graphiql/**", "/", "/index.html").permitAll()
-                        // GET endpoints: both roles can read
+                                "/api/proxy/**", "/graphiql/**", "/", "/index.html").permitAll()
+                        // any authenticated user can read
                         .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("READ_ONLY", "FULL_ACCESS")
-                        // GraphQL (always POST): both roles can query/mutate
+                        // GraphQL queries — both roles allowed
                         .requestMatchers(HttpMethod.POST, "/graphql").hasAnyRole("READ_ONLY", "FULL_ACCESS")
-                        // Write endpoints: only FULL_ACCESS
+                        // write operations — admin only
                         .requestMatchers(HttpMethod.POST, "/api/**").hasRole("FULL_ACCESS")
                         .requestMatchers(HttpMethod.PUT, "/api/**").hasRole("FULL_ACCESS")
                         .requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("FULL_ACCESS")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
+                        // Returns JSON 403 instead of the default HTML error page
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             response.setStatus(403);
                             response.setContentType("application/json");
@@ -59,6 +57,7 @@ public class SecurityConfig {
                         })
                 )
                 .authenticationProvider(authenticationProvider())
+                // JwtFilter runs before Spring Security's default username/password filter
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
@@ -82,8 +81,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // gRPC does not use JWT auth in this project — return null (anonymous) so the
-    // gRPC security autoconfiguration is satisfied without blocking any calls.
     @Bean
     public GrpcAuthenticationReader grpcAuthenticationReader() {
         return (call, headers) -> null;

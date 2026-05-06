@@ -467,3 +467,57 @@ Caused by: org.h2.mvstore.MVStoreException: The file is locked: /Users/paolacari
 2026-04-06 21:22:29.754923+02:00 jdbc[13]: exception
 org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statement "select * from [*]user"; expected "identifier"; SQL statement:
 select * from user [42001-232]
+2026-05-04 21:37:10.105574+02:00 jdbc[13]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statement "[*]delte * from users"; expected "DELETE, DROP"; SQL statement:
+delte * from users [42001-232]
+2026-05-04 21:37:17.810599+02:00 jdbc[13]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statement "delete [*]* from users"; expected "identifier"; SQL statement:
+delete * from users [42001-232]
+2026-05-04 21:37:33.444137+02:00 jdbc[13]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statement "drop [*]* from users"; expected "TABLE, INDEX, USER, SEQUENCE, CONSTANT, TRIGGER, MATERIALIZED, VIEW, ROLE, ALIAS, SCHEMA, ALL OBJECTS, DOMAIN, TYPE, AGGREGATE, SYNONYM"; SQL statement:
+drop * from users [42001-232]
+2026-05-04 21:37:36.646198+02:00 jdbc[13]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statement "drop  [*]users"; expected "TABLE, INDEX, USER, SEQUENCE, CONSTANT, TRIGGER, MATERIALIZED, VIEW, ROLE, ALIAS, SCHEMA, ALL OBJECTS, DOMAIN, TYPE, AGGREGATE, SYNONYM"; SQL statement:
+drop  users [42001-232]
+2026-05-04 21:38:23.640123+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 21:38:25.870808+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 21:38:26.741393+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 21:38:26.952411+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 21:38:27.151677+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 21:38:27.384084+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 21:38:32.295127+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 21:38:40.467588+02:00 jdbc[13]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+drop table Users [42102-232]
+2026-05-04 21:39:08.180927+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 21:39:17.052541+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 21:39:19.748128+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 22:08:32.397071+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 22:09:00.339665+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]
+2026-05-04 22:09:15.149567+02:00 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "USERS" not found; SQL statement:
+select u1_0.id,u1_0.avatar,u1_0.email,u1_0.first_name,u1_0.last_name from users u1_0 [42102-232]

@@ -21,7 +21,7 @@ public class UserService {
 
     public UserService(
             UserRepository userRepository,
-            RestClient.Builder restClientBuilder,
+            RestClient.Builder restClientBuilder, // Spring auto-configures the builder with defaults
             @Value("${reqres.api-key}") String reqresApiKey
     ) {
         this.userRepository = userRepository;
@@ -29,23 +29,20 @@ public class UserService {
         this.reqresApiKey = reqresApiKey;
     }
 
-    // Local users are stored in H2 and will become the base for the custom API.
     public List<User> getAllLocalUsers() {
         return userRepository.findAll();
     }
 
-    // Return one local user or fail with a simple 404-style exception.
     public User getLocalUserById(Long id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException(id));
     }
 
-    // This simple save method is enough for Day 1 and Day 2 CRUD work.
     public User saveLocalUser(User user) {
         return userRepository.save(user);
     }
 
-    // Update only the fields provided — blank/null fields keep their existing value.
+    // Partial update — only overwrites fields that are present and non-blank in the request
     public User updateLocalUser(Long id, User updatedUser) {
         User existingUser = getLocalUserById(id);
         if (updatedUser.getEmail()     != null && !updatedUser.getEmail().isBlank())     existingUser.setEmail(updatedUser.getEmail());
@@ -55,13 +52,11 @@ public class UserService {
         return userRepository.save(existingUser);
     }
 
-    // Delete one user after checking that the record exists.
     public void deleteLocalUser(Long id) {
         User existingUser = getLocalUserById(id);
         userRepository.delete(existingUser);
     }
 
-    // This helper imports one ReqRes page into the local H2 database.
     public List<User> importPublicUsers(int page) {
         ReqResUsersResponse response = getPublicUsers(page);
         List<User> usersToSave = new ArrayList<>();
@@ -82,7 +77,7 @@ public class UserService {
         return userRepository.saveAll(usersToSave);
     }
 
-    // Fetch a page of users from ReqRes so we can compare the public and local models.
+    // Calls the ReqRes public REST API and deserializes the paginated response
     public ReqResUsersResponse getPublicUsers(int page) {
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/api/users").queryParam("page", page).build())
@@ -90,8 +85,4 @@ public class UserService {
                 .retrieve()
                 .body(ReqResUsersResponse.class);
     }
-
-
-
-
 }

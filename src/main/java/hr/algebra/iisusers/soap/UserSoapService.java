@@ -23,11 +23,10 @@ import javax.xml.xpath.XPathFactory;
 import java.io.StringReader;
 import java.io.StringWriter;
 
-// SOAP endpoint: accepts a search term, filters the generated ReqRes XML with XPath,
-// and returns the matching <user> nodes as an XML string.
 @Endpoint
 public class UserSoapService {
 
+    //unique namespace
     private static final String NAMESPACE = "http://algebra.hr/soap/users";
 
     private final XmlGenerationService xmlGenerationService;
@@ -39,39 +38,52 @@ public class UserSoapService {
     @PayloadRoot(namespace = NAMESPACE, localPart = "searchUsersRequest")
     @ResponsePayload
     public SearchUsersResponse search(@RequestPayload SearchUsersRequest request) throws Exception {
-        // Use the stored XML, or generate a fresh one from page 1 if none exists yet.
+        // XML must be generated first via GET /api/xml/generate
         String xml = xmlGenerationService.getLastGeneratedXml();
         if (xml == null) {
-            xml = xmlGenerationService.generateFromReqRes(1);
+            SearchUsersResponse error = new SearchUsersResponse();
+            error.setResult("Error: XML has not been generated yet. Please click 'Generate XML from ReqRes' first.");
+            return error;
+        }
+        //must be validated firts as well
+        if (!xmlGenerationService.isValidated()) {
+            SearchUsersResponse error = new SearchUsersResponse();
+            error.setResult("Error: XML has not been validated yet. Please click 'Validate XML (Jakarta)' first.");
+            return error;
         }
 
-        // Parse the XML document.
+        //parses the xml
         DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
         Document doc = builder.parse(new InputSource(new StringReader(xml)));
 
-        // Use XPath to find all <user> elements where firstName or lastName contains the search term.
-        // translate() converts to lowercase so the search is case-insensitive (XPath 1.0 has no lower-case()).
+
+        //xpath used to search the document(has all public users) by user input(eaither firstame or lastname)
         String term = request.getSearchTerm().toLowerCase();
         XPath xpath = XPathFactory.newInstance().newXPath();
+        // translate() converts firstName/lastName to lowercase before comparing)
         String expression = "//user[contains(translate(firstName,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'" + term + "')" +
                 " or contains(translate(lastName,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'" + term + "')]";
         NodeList matched = (NodeList) xpath.evaluate(expression, doc, XPathConstants.NODESET);
 
-        // Serialize the matched nodes back to an XML string.
+
         Transformer transformer = TransformerFactory.newInstance().newTransformer();
         transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
 
-        StringBuilder sb = new StringBuilder("<matchedUsers>");
+        // Single StringWriter reused across all nodes — transformer writes directly into its buffer
+        StringWriter sw = new StringWriter();
+        sw.write("<matchedUsers>");
+
+        //transformes the doc obj to text, filled in sw
         for (int i = 0; i < matched.getLength(); i++) {
             Node node = matched.item(i);
-            StringWriter sw = new StringWriter();
             transformer.transform(new DOMSource(node), new StreamResult(sw));
-            sb.append(sw.toString());
         }
-        sb.append("</matchedUsers>");
 
+        sw.write("</matchedUsers>");
+
+        //returned as string
         SearchUsersResponse response = new SearchUsersResponse();
-        response.setResult(sb.toString());
+        response.setResult(sw.toString());
         return response;
     }
 }

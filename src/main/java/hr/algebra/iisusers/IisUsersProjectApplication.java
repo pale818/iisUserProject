@@ -15,9 +15,7 @@ public class IisUsersProjectApplication {
         SpringApplication.run(IisUsersProjectApplication.class, args);
     }
 
-    // Seed two test users on startup if they do not already exist.
-    // reader/reader123 → READ_ONLY (GET only)
-    // admin/admin123  → FULL_ACCESS (all methods)
+    // Runs once on startup — inserts demo users only if they don't already exist
     @Bean
     CommandLineRunner seedUsers(AppUserRepository repo, PasswordEncoder encoder) {
         return args -> {
@@ -25,14 +23,14 @@ public class IisUsersProjectApplication {
                 repo.save(AppUser.builder()
                         .username("reader")
                         .password(encoder.encode("reader123"))
-                        .role("READ_ONLY")
+                        .role("READ_ONLY")   // can only read via GET
                         .build());
             }
             if (repo.findByUsername("admin").isEmpty()) {
                 repo.save(AppUser.builder()
                         .username("admin")
                         .password(encoder.encode("admin123"))
-                        .role("FULL_ACCESS")
+                        .role("FULL_ACCESS") // can create, update, delete
                         .build());
             }
         };

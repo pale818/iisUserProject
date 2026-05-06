@@ -10,8 +10,11 @@ import org.springframework.stereotype.Controller;
 import java.util.List;
 import java.util.Map;
 
+// @Controller (not @RestController) — Spring GraphQL handles serialization itself;
+// @RestController would conflict by trying to write the return value directly as the HTTP response body
 @Controller
-public class UserGraphQLController {
+public class
+UserGraphQLController {
 
     private final UserService userService;
 

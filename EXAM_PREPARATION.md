@@ -171,6 +171,41 @@ Security is already covered — all `/api/**` endpoints are protected automatica
 
 ---
 
+## Manual XML Validation (Whiteboard Task)
+
+**Question: "Can you write a simple Java method to validate an XML string against an XSD file without using JAXB?"**
+
+**The 4-Step Pattern:**
+1. **Factory**: Create the `SchemaFactory`.
+2. **Schema**: Load the `.xsd` file.
+3. **Validator**: Create a `Validator` from the schema.
+4. **Action**: Call `validate()`.
+
+**The Code:**
+```java
+public boolean validateManual(String xml, String xsdPath) throws Exception {
+    // 1. Initialize the Schema Factory (W3C Standard)
+    SchemaFactory factory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
+
+    // 2. Load the Rulebook (XSD)
+    Schema schema = factory.newSchema(new File(xsdPath));
+
+    // 3. Create the Validator (The Guard)
+    Validator validator = schema.newValidator();
+
+    // 4. Perform the Validation
+    try {
+        validator.validate(new StreamSource(new StringReader(xml)));
+        return true; // Valid
+    } catch (SAXException e) {
+        System.out.println("Error: " + e.getMessage());
+        return false; // Invalid
+    }
+}
+```
+
+---
+
 ## General architecture questions
 
 **"How would you add a PostgreSQL database instead of H2?"**
@@ -191,3 +226,73 @@ Every HTTP request passes through `JwtFilter` before reaching any controller. Th
 
 **"What is the API switch in the GUI?"**
 The frontend can toggle between calling `GET /api/users` (local H2 database) and `GET /api/users/public` (live ReqRes public API). Both return the same user shape so the table renders the same way. This demonstrates the interoperability theme of the project.
+
+---
+
+## REST Constraints — what this project implements
+
+REST has 6 constraints (5 mandatory, 1 optional):
+
+| Constraint | Implemented? | How |
+|---|---|---|
+| **Client-Server** | Yes | Frontend (HTML/JS) is completely separate from the backend (Spring Boot) |
+| **Stateless** | Yes | No server sessions — every request carries a JWT, server holds no client state between calls |
+| **Cacheable** | Partially | GET endpoints return standard HTTP responses; no explicit `Cache-Control` headers added |
+| **Uniform Interface** | Yes | Resource URIs (`/api/users`), HTTP verbs (GET/POST/PUT/DELETE), standard status codes |
+| **Layered System** | Yes | Security filter layer (JwtFilter) sits between client and controller; could add a proxy/gateway layer |
+| **Code on Demand** | No (optional) | Not implemented — this is the only optional constraint and is rarely used in practice |
+
+**"What is Code on Demand?"**
+The server sends executable code (JavaScript) to the client instead of just data. The client downloads it and runs it with `eval()`. Example use case: server sends a `formatPrice()` function so the client always uses the server's latest formatting logic without redeployment. It is optional and rarely implemented — the professor showed it as a separate standalone demo.
+
+---
+
+## How this project compares to the professor's REST demo
+
+The professor's `rest-demo` and this project cover the same core concepts. The differences are trade-offs, not mistakes — know how to explain them.
+
+**JWT — same idea, different security level:**
+
+| | This project | Professor's demo |
+|---|---|---|
+| Access token | Short-lived, sent in `Authorization` header | Same |
+| Refresh token | Stored in H2 DB, **returned in JSON body** | Stored in Redis, **sent as HttpOnly Secure SameSite=Strict cookie** |
+| Token rotation | No — refresh just issues a new access token | Yes — old refresh token revoked in Redis on every use |
+| Revocation | No — token is valid until it expires | Yes — Redis revocation list, logout actually works |
+| BCrypt strength | Default (10) | Strength 12 |
+
+**"Why did you not use HttpOnly cookies for the refresh token?"**
+Simpler to implement and easier to demonstrate in a plain HTML frontend without backend CORS cookie handling. The downside is the refresh token is accessible to JavaScript — in a production system you would move it to an HttpOnly cookie to prevent XSS access. The security trade-off is documented.
+
+**"What would you improve about the JWT implementation?"**
+Three things: (1) move the refresh token to an HttpOnly Secure SameSite cookie so JavaScript cannot read it, (2) add token rotation — revoke the old refresh token each time a new one is issued, (3) add a revocation list so logout actually invalidates tokens before expiry.
+
+**Error responses:**
+
+| | This project | Professor's demo |
+|---|---|---|
+| Format | `{"message": "User not found"}` | RFC 7807 Problem Details: `{"type": "...", "title": "...", "status": 404, "detail": "..."}` |
+| Validation errors | `{"errors": [...]}` from XML/JSON validators | Grouped field-level errors in `errors` map |
+
+**"What is RFC 7807?"**
+A standard format for HTTP error responses. Instead of ad-hoc JSON like `{"message": "..."}`, it defines fields: `type` (URI identifying the error type), `title` (short description), `status` (HTTP code), `detail` (specific message). Makes error handling predictable across APIs.
+
+**Authorization approach:**
+
+| | This project | Professor's demo |
+|---|---|---|
+| Where rules live | `SecurityConfig.java` — URL pattern rules | `SecurityConfig.java` + `@PreAuthorize` on methods |
+| Granularity | Per HTTP method + URL pattern | Per method call, can check roles or expressions |
+
+**"What is `@PreAuthorize`?"**
+A Spring annotation put directly on a controller method. Example: `@PreAuthorize("hasRole('ADMIN')")`. The check runs before the method executes. This project uses URL-based rules in `SecurityConfig` instead — both achieve the same result, method-level is more fine-grained.
+
+**External HTTP calls:**
+
+| | This project | Professor's demo |
+|---|---|---|
+| HTTP client | RestTemplate (blocking, synchronous) | WebClient (reactive, non-blocking) |
+| External APIs | ReqRes (user data) | Google Gemini AI + GitHub API |
+
+**"What is the difference between RestTemplate and WebClient?"**
+RestTemplate is the older Spring HTTP client — it blocks the thread while waiting for a response. WebClient is reactive (from Spring WebFlux) — it does not block the thread, freeing it to handle other requests while waiting. For a project with few concurrent external calls, RestTemplate is fine. WebClient is better under high load.

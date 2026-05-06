@@ -7,6 +7,6 @@ import java.util.Optional;
 
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findByUsername(String username);
+    // Used during token refresh to look up who owns the incoming refresh token
     Optional<AppUser> findByRefreshToken(String refreshToken);
-
 }

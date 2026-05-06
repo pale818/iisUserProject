@@ -32,15 +32,13 @@ public class XmlController {
         this.userService = userService;
     }
 
-    // Fetches ReqRes users and returns them as XML.
-    // Also stores the result so SOAP search and Jakarta validate can reuse it.
+    // Fetches users from ReqRes, builds an XML document, stores it in memory, and returns it as text/xml
     @GetMapping(value = "/generate", produces = MediaType.TEXT_XML_VALUE)
     public String generate(@RequestParam(defaultValue = "1") int page) throws Exception {
         return xmlGenerationService.generateFromReqRes(page);
     }
 
-    // Receives a single <user> XML body, validates it with JAXB + XSD,
-    // saves to the database if valid, returns errors if not. (Requirement 1)
+    // Validates a single <user> element against user.xsd and saves it to the DB if valid
     @PostMapping("/validate-save")
     public ResponseEntity<?> validateAndSave(@RequestBody String xml) {
         List<String> errors = xmlValidationService.validateUser(xml);
@@ -56,8 +54,7 @@ public class XmlController {
         }
     }
 
-    // Validates the last generatework wit XML using Jakarta XML Bind (JAXB) + XSD.
-    // Call GET /api/xml/generate first to populate the stored XML. (Requirement 3)
+    // Validates the last generated <users> XML (from /generate) against user.xsd using Jakarta XML Bind
     @GetMapping("/jakarta-validate")
     public ResponseEntity<?> jakartaValidate() {
         String xml = xmlGenerationService.getLastGeneratedXml();
@@ -66,7 +63,9 @@ public class XmlController {
                     .body(Map.of("error", "No XML generated yet. Call GET /api/xml/generate first."));
         }
         List<String> errors = xmlValidationService.validateUsers(xml);
+        //marks as validated
         if (errors.isEmpty()) {
+            xmlGenerationService.markValidated();
             return ResponseEntity.ok(Map.of("message", "Generated XML is valid according to user.xsd"));
         }
         return ResponseEntity.ok(Map.of("errors", errors));

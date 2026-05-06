@@ -2,12 +2,13 @@ package hr.algebra.iisusers.users.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-// This DTO matches the user objects inside the ReqRes "data" array.
+// DTO for deserializing a single user from the ReqRes API response
 public class ReqResUserDto {
 
     private Integer id;
     private String email;
 
+    // ReqRes uses snake_case; @JsonProperty maps the JSON field to the camelCase Java field
     @JsonProperty("first_name")
     private String firstName;
 

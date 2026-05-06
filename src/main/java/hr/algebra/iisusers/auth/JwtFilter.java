@@ -13,6 +13,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+// OncePerRequestFilter guarantees this runs exactly once per HTTP request
 @Component
 public class JwtFilter extends OncePerRequestFilter {
 
@@ -29,6 +30,7 @@ public class JwtFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         String header = request.getHeader("Authorization");
+        // If there is no Bearer token, skip this filter — request reaches Spring Security unauthenticated
         if (header == null || !header.startsWith("Bearer ")) {
             chain.doFilter(request, response);
             return;
@@ -47,6 +49,7 @@ public class JwtFilter extends OncePerRequestFilter {
                     userDetails, null, userDetails.getAuthorities()
             );
             auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            // Placing auth in SecurityContext makes this user visible to all Spring Security rules
             SecurityContextHolder.getContext().setAuthentication(auth);
         }
 

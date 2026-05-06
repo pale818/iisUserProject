@@ -23,10 +23,10 @@ public class AuthController {
         this.userRepo = userRepo;
     }
 
-    // Login: returns a short-lived access token and a long-lived refresh token.
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody AuthRequest request) {
         try {
+            //  credential check to Spring Security's AuthenticationManager
             authManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.username(), request.password())
             );
@@ -37,16 +37,18 @@ public class AuthController {
         AppUser user = userRepo.findByUsername(request.username()).orElseThrow();
         String accessToken = jwtService.generateAccessToken(user.getUsername());
         String refreshToken = jwtService.generateRefreshToken(user.getUsername());
+        // Persist the refresh token so it can be validated and revoked later
         user.setRefreshToken(refreshToken);
         userRepo.save(user);
 
+        // Returns both tokens and the role so the frontend can adjust the UI immediately
         return ResponseEntity.ok(new AuthResponse(accessToken, refreshToken, user.getRole()));
     }
 
-    // Refresh: send the refresh token in the body, get a new access token back.
     @PostMapping("/refresh")
     public ResponseEntity<?> refresh(@RequestBody String refreshToken) {
         String token = refreshToken.trim();
+        // Valid only if the token exists in the DB (not revoked) AND is not expired
         return userRepo.findByRefreshToken(token)
                 .filter(u -> jwtService.isTokenValid(token))
                 .map(u -> ResponseEntity.ok(jwtService.generateAccessToken(u.getUsername())))

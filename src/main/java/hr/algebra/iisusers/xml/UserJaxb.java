@@ -4,8 +4,8 @@ import jakarta.xml.bind.annotation.XmlAccessType;
 import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlRootElement;
 
-// JAXB-annotated class that mirrors the <user> element in user.xsd.
-// Used by XmlValidationService to unmarshal and validate a single user XML body.
+// JAXB-mapped class for XML unmarshalling — kept separate from the JPA User entity on purpose
+// so that XML validation concerns don't bleed into the database model
 @XmlRootElement(name = "user")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class UserJaxb {

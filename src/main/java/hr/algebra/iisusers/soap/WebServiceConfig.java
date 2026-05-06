@@ -12,12 +12,11 @@ import org.springframework.ws.wsdl.wsdl11.DefaultWsdl11Definition;
 import org.springframework.xml.xsd.SimpleXsdSchema;
 import org.springframework.xml.xsd.XsdSchema;
 
-// Registers the Spring WS servlet and auto-generates the WSDL from users-soap.xsd.
-// WSDL is accessible at: http://localhost:8080/ws/users.wsdl
 @EnableWs
 @Configuration
 public class WebServiceConfig extends WsConfigurerAdapter {
 
+    // Registers the Spring WS servlet at /ws/* — all SOAP requests go through this path
     @Bean
     public ServletRegistrationBean<MessageDispatcherServlet> messageDispatcherServlet(ApplicationContext context) {
         MessageDispatcherServlet servlet = new MessageDispatcherServlet();
@@ -26,14 +25,14 @@ public class WebServiceConfig extends WsConfigurerAdapter {
         return new ServletRegistrationBean<>(servlet, "/ws/*");
     }
 
-    // The bean name "users" means the WSDL will be served at /ws/users.wsdl
+    // The bean name "users" determines the WSDL URL: GET /ws/users.wsdl
     @Bean(name = "users")
     public DefaultWsdl11Definition usersWsdl(XsdSchema usersSchema) {
         DefaultWsdl11Definition def = new DefaultWsdl11Definition();
         def.setPortTypeName("UsersPort");
         def.setLocationUri("/ws");
-        def.setTargetNamespace("http://algebra.hr/soap/users");
-        def.setSchema(usersSchema);
+        def.setTargetNamespace("http://algebra.hr/soap/users"); //uniwue namespace
+        def.setSchema(usersSchema); // WSDL is auto-generated from the XSD — no manual WSDL file needed
         return def;
     }
 

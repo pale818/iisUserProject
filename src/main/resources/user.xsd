@@ -2,7 +2,6 @@
 
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
-    <!-- Shared type used for both <user> and <users> elements -->
     <xs:complexType name="UserType">
         <xs:sequence>
             <xs:element name="id"        type="xs:integer" minOccurs="0"/>
@@ -13,10 +12,8 @@
         </xs:sequence>
     </xs:complexType>
 
-    <!-- Single user — used for POST validate-save endpoint -->
     <xs:element name="user" type="UserType"/>
 
-    <!-- Collection of users — used for generated ReqRes XML and Jakarta XML validation -->
     <xs:element name="users">
         <xs:complexType>
             <xs:sequence>

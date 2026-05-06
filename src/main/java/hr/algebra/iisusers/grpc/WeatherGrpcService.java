@@ -3,13 +3,8 @@ package hr.algebra.iisusers.grpc;
 import io.grpc.stub.StreamObserver;
 import net.devh.boot.grpc.server.service.GrpcService;
 
-/**
- * gRPC server endpoint for weather data.
- * Runs on port 9090 (configured via grpc.server.port in application.properties).
- *
- * The WeatherServiceGrpc base class and WeatherProto message classes are generated
- * from src/main/proto/weather.proto by the protobuf-maven-plugin during the build.
- */
+// gRPC service — extends the auto-generated base class from weather.proto
+// Runs on a separate port (default 9090) from the REST API (8080)
 @GrpcService
 public class WeatherGrpcService extends WeatherServiceGrpc.WeatherServiceImplBase {
 
@@ -23,10 +18,13 @@ public class WeatherGrpcService extends WeatherServiceGrpc.WeatherServiceImplBas
     public void getWeather(WeatherProto.WeatherRequest request,
                            StreamObserver<WeatherProto.WeatherListResponse> responseObserver) {
 
+        //gets matches cities
         var results = weatherFetchService.fetchWeather(request.getStation());
 
+        // Protobuf uses a builder pattern — each field must be set explicitly
         WeatherProto.WeatherListResponse.Builder listBuilder = WeatherProto.WeatherListResponse.newBuilder();
 
+        //builds protubuf binary result, rules by .proto file
         for (WeatherFetchService.WeatherData data : results) {
             WeatherProto.WeatherResponse response = WeatherProto.WeatherResponse.newBuilder()
                     .setStation(data.station())
@@ -37,6 +35,7 @@ public class WeatherGrpcService extends WeatherServiceGrpc.WeatherServiceImplBas
             listBuilder.addResults(response);
         }
 
+        // onNext sends the response, onCompleted signals the stream is finished
         responseObserver.onNext(listBuilder.build());
         responseObserver.onCompleted();
     }

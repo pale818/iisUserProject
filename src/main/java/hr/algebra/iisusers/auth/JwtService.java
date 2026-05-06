@@ -22,6 +22,7 @@ public class JwtService {
 
     @Value("${jwt.refresh-token-expiry-ms}")
     private long refreshExpiryMs;
+    
 
     public String generateAccessToken(String username) {
         return buildToken(username, accessExpiryMs);
@@ -46,6 +47,7 @@ public class JwtService {
 
     public boolean isTokenValid(String token) {
         try {
+            // getClaims throws JwtException if signature is invalid or token is expired
             getClaims(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
@@ -62,6 +64,7 @@ public class JwtService {
     }
 
     private SecretKey getSigningKey() {
+        // Secret is stored as a Base64 string in application.properties and decoded here
         byte[] keyBytes = Decoders.BASE64.decode(secret);
         return Keys.hmacShaKeyFor(keyBytes);
     }

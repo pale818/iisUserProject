@@ -12,20 +12,16 @@ import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Fetches the live DHMZ Croatian weather XML and extracts data for all stations
- * matching the given name (partial, case-insensitive).
- * DHMZ XML URL: http://vrijeme.hr/hrvatska_n.xml
- */
 @Service
 public class WeatherFetchService {
 
+    // DHMZ  public XML feed with current weather data
     private static final String DHMZ_URL = "https://vrijeme.hr/hrvatska_n.xml";
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    // Returns all stations whose name contains the requested string (case-insensitive).
-    // Falls back to the first station if nothing matches.
+
+    //gets weather data in binary form-avoids encoding issues later
     public List<WeatherData> fetchWeather(String stationName) {
         try {
             byte[] xmlBytes = restTemplate.getForObject(DHMZ_URL, byte[].class);
@@ -38,11 +34,13 @@ public class WeatherFetchService {
         }
     }
 
+    //parses the xml bytes to java obj, doc
     private List<WeatherData> parseWeather(byte[] xmlBytes, String requestedStation) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         DocumentBuilder builder = factory.newDocumentBuilder();
         Document doc = builder.parse(new ByteArrayInputStream(xmlBytes));
 
+        // Datum and Termin are top-level elements in the DHMZ feed (date and observation hour)
         String datum = rootText(doc, "Datum");
         String termin = rootText(doc, "Termin");
         String timestamp = datum + " " + termin + ":00";
@@ -51,6 +49,7 @@ public class WeatherFetchService {
         List<WeatherData> matches = new ArrayList<>();
         Element first = null;
 
+        //looks for matched cities by user input
         for (int i = 0; i < stations.getLength(); i++) {
             Element el = (Element) stations.item(i);
             if (first == null) first = el;
@@ -60,7 +59,7 @@ public class WeatherFetchService {
             }
         }
 
-        // Fall back to first station if nothing matched
+        // Fallback: if no station matched, return the first one so the UI always shows something
         if (matches.isEmpty() && first != null) {
             matches.add(buildWeatherData(first, timestamp));
         }
@@ -68,6 +67,7 @@ public class WeatherFetchService {
         return matches;
     }
 
+    //goes through the doc and makes the record WeatherData
     private WeatherData buildWeatherData(Element station, String timestamp) {
         String name = directText(station, "GradIme");
         String temp = "N/A";

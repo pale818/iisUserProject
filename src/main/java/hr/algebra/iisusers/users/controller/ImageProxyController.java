@@ -8,14 +8,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
+// Proxies avatar images through the server to avoid CORS errors in the browser
+// (external image URLs from ReqRes are on a different origin, so the browser blocks direct access)
 @RestController
 @RequestMapping("/api/proxy")
 public class ImageProxyController {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    // Fetches an external image server-side and returns it to the browser.
-    // This avoids Cross-Origin-Resource-Policy blocks on images from reqres.in.
     @GetMapping("/image")
     public ResponseEntity<byte[]> proxyImage(@RequestParam String url) {
         byte[] bytes = restTemplate.getForObject(url, byte[].class);

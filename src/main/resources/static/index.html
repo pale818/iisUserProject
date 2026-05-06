@@ -20,7 +20,6 @@
 </head>
 <body>
 
-<!-- LOGIN -->
 <div id="login-section">
   <h2>Login</h2>
   <input id="username" placeholder="Username" value="admin">
@@ -29,11 +28,9 @@
   <div id="error"></div>
 </div>
 
-<!-- MAIN APP (shown after login) -->
 <div id="app-section" class="hidden">
   <div id="status"></div>
 
-  <!-- USERS -->
   <h2>Users</h2>
   <label>
     <input type="radio" name="api" value="local" checked onchange="loadUsers()"> Local API (H2)
@@ -43,13 +40,13 @@
     <input type="radio" name="api" value="public" onchange="loadUsers()"> Public API (ReqRes)
   </label>
   <button onclick="loadUsers()" style="margin-left:10px">Refresh</button>
+  <button onclick="importUsers()" style="margin-left:10px">Import Users</button>
 
   <table id="users-table">
     <thead><tr><th>ID</th><th>Email</th><th>First Name</th><th>Last Name</th><th>Avatar</th><th></th></tr></thead>
     <tbody id="users-body"></tbody>
   </table>
 
-  <!-- CREATE USER (local only, FULL_ACCESS only) -->
   <div id="create-section" class="hidden">
     <h2>Create User (local, REST POST)</h2>
     <input id="new-email"     placeholder="Email">
@@ -59,7 +56,6 @@
     <button onclick="createUser()">Create</button>
   </div>
 
-  <!-- UPDATE USER (local only, FULL_ACCESS only) -->
   <div id="update-section" class="hidden">
     <h2>Update User (local, REST PUT)</h2>
     <input id="upd-id"        placeholder="User ID" style="width:80px">
@@ -71,21 +67,22 @@
     <div id="update-result" class="result-box hidden"></div>
   </div>
 
-  <!-- XML VALIDATION -->
-  <h2>XML Validation + Save</h2>
-  <p style="margin:4px 0;font-size:13px;color:#555">Edit the XML below then submit. Valid data will be saved to the database.</p>
-  <textarea id="xml-input" rows="8"></textarea><br>
-  <button onclick="submitXml()">Validate &amp; Save</button>
-  <div id="xml-result" class="result-box hidden"></div>
+  <div id="xml-save-section" class="hidden">
+    <h2>XML Validation + Save</h2>
+    <p style="margin:4px 0;font-size:13px;color:#555">Edit the XML below then submit. Valid data will be saved to the database.</p>
+    <textarea id="xml-input" rows="8"></textarea><br>
+    <button onclick="submitXml()">Validate &amp; Save</button>
+    <div id="xml-result" class="result-box hidden"></div>
+  </div>
 
-  <!-- JSON VALIDATION -->
-  <h2>JSON Validation + Save</h2>
-  <p style="margin:4px 0;font-size:13px;color:#555">Edit the JSON below then submit. Valid data will be saved to the database.</p>
-  <textarea id="json-input" rows="8"></textarea><br>
-  <button onclick="submitJson()">Validate &amp; Save</button>
-  <div id="json-result" class="result-box hidden"></div>
+  <div id="json-save-section" class="hidden">
+    <h2>JSON Validation + Save</h2>
+    <p style="margin:4px 0;font-size:13px;color:#555">Edit the JSON below then submit. Valid data will be saved to the database.</p>
+    <textarea id="json-input" rows="8"></textarea><br>
+    <button onclick="submitJson()">Validate &amp; Save</button>
+    <div id="json-result" class="result-box hidden"></div>
+  </div>
 
-  <!-- SOAP + JAKARTA XML VALIDATION (unified flow) -->
   <h2>SOAP — Search Users by Name</h2>
   <p style="margin:4px 0;font-size:13px;color:#555">Generate XML from ReqRes, validate it with Jakarta XML Bind, then search via SOAP + XPath.</p>
   <button onclick="generateXml()">1. Generate XML from ReqRes</button>
@@ -97,7 +94,6 @@
   <button onclick="soapSearch()">Search via SOAP</button>
   <div id="soap-result" class="result-box hidden"></div>
 
-  <!-- GRAPHQL -->
   <h2>GraphQL</h2>
   <p style="margin:4px 0;font-size:13px;color:#555">All operations go to <code>/graphql</code>.</p>
 
@@ -131,7 +127,6 @@
 
   <div id="gql-result" class="result-box hidden"></div>
 
-  <!-- WEATHER -->
   <h2>Weather (gRPC via REST)</h2>
   <input id="station" placeholder="Station name (e.g. Zagreb)" value="Zagreb">
   <button onclick="getWeather()">Get Weather</button>
@@ -187,19 +182,19 @@
       document.getElementById('create-section').classList.toggle('hidden', userRole !== 'FULL_ACCESS');
       document.getElementById('update-section').classList.toggle('hidden', userRole !== 'FULL_ACCESS');
       document.getElementById('gql-mutation-section').classList.toggle('hidden', userRole !== 'FULL_ACCESS');
+      document.getElementById('xml-save-section').classList.toggle('hidden', userRole !== 'FULL_ACCESS');
+      document.getElementById('json-save-section').classList.toggle('hidden', userRole !== 'FULL_ACCESS');
       document.getElementById('xml-input').value = XML_TEMPLATE;
       document.getElementById('json-input').value = JSON_TEMPLATE;
-      loadUsers();
+      //loadUsers();
     } catch (e) { setError('Login error: ' + e.message); }
   }
 
-  // Fetch wrapper: injects the access token, and on 401 tries to refresh once before giving up.
   async function authFetch(url, options = {}) {
     options.headers = { ...options.headers, 'Authorization': 'Bearer ' + accessToken };
     let res = await fetch(url, options);
     if (res.status !== 401) return res;
 
-    // Access token expired — try to get a new one using the refresh token.
     const refreshRes = await fetch('/auth/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
@@ -237,6 +232,18 @@
       renderUsers(users, api === 'local');
     } catch (e) { setStatus('Error loading users: ' + e.message); }
   }
+
+  async function importUsers() {
+    try {
+      const res = await
+              authFetch('/api/users/import-public');
+      if (!res.ok) { setStatus('Failed to import users: ' + res.status); return; }
+        const users = await res.json();
+        renderUsers(users, true);
+      } catch (e) { setStatus('Error importing users:' + e.message); }
+    }
+
+
 
   function renderUsers(users, isLocal) {
     const tbody = document.getElementById('users-body');

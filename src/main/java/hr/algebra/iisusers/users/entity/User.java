@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+// JPA entity mapped to the "users" table — stores public user data (separate from app_users)
 @Entity
 @Table(name = "users")
 public class User {
@@ -15,7 +16,6 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Keep the local user model aligned with the public ReqRes user fields.
     @Column(nullable = false, unique = true)
     private String email;
 
